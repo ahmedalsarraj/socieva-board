@@ -340,7 +340,7 @@ const msalConfig = {
   cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
 };
 
-const msal = new msal.PublicClientApplication(msalConfig);
+const msalApp = new msal.PublicClientApplication(msalConfig);
 let accessToken = null;
 let currentUser = null;
 let cards = [];
@@ -367,13 +367,13 @@ function showToast(msg,type=''){
 function setLoading(pct){document.getElementById('loadingBar').style.width=pct+'%'}
 
 async function getToken(){
-  const accounts = msal.getAllAccounts();
+  const accounts = msalApp.getAllAccounts();
   if(!accounts.length) throw new Error('Not signed in');
   try{
-    const res = await msal.acquireTokenSilent({scopes:SCOPES,account:accounts[0]});
+    const res = await msalApp.acquireTokenSilent({scopes:SCOPES,account:accounts[0]});
     return res.accessToken;
   }catch(e){
-    const res = await msal.acquireTokenPopup({scopes:SCOPES});
+    const res = await msalApp.acquireTokenPopup({scopes:SCOPES});
     return res.accessToken;
   }
 }
@@ -445,10 +445,10 @@ async function uploadFile(file,subfolder){
 }
 
 async function init(){
-  await msal.initialize();
-  const res = await msal.handleRedirectPromise();
+  await msalApp.initialize();
+  const res = await msalApp.handleRedirectPromise();
   if(res){accessToken=res.accessToken}
-  const accounts = msal.getAllAccounts();
+  const accounts = msalApp.getAllAccounts();
   if(accounts.length){
     await startApp(accounts[0]);
   }
@@ -471,13 +471,13 @@ async function startApp(account){
 
 document.getElementById('loginBtn').addEventListener('click',async()=>{
   try{
-    const res = await msal.loginPopup({scopes:SCOPES});
+    const res = await msalApp.loginPopup({scopes:SCOPES});
     await startApp(res.account);
   }catch(e){showToast('Login failed: '+e.message,'error')}
 });
 
 document.getElementById('userAvatar').addEventListener('click',()=>{
-  msal.logoutPopup();
+  msalApp.logoutPopup();
   location.reload();
 });
 
