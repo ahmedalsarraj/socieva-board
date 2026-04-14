@@ -149,6 +149,9 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .upload-status{font-size:11px;color:#5ae8a0;margin-top:4px;text-align:center}
 .upload-status.error{color:#f87171}
 .upload-link{font-size:11px;color:var(--blue);word-break:break-all;margin-top:4px;text-align:center}
+.upload-preview{border-radius:8px;overflow:hidden;margin-bottom:8px;cursor:zoom-in;background:var(--bg3);border:1px solid var(--border)}
+.upload-preview img{width:100%;max-height:120px;object-fit:cover;display:block}
+.upload-preview-vid{height:68px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer}
 .modal-footer{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-top:1px solid var(--border)}
 
 /* TOAST */
@@ -313,6 +316,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
     <div class="field-grid">
       <div class="field">
         <label>Thumbnail / photos</label>
+        <div class="upload-preview" id="thumbPreview" style="display:none"></div>
         <div class="upload-box" id="thumbBox" onclick="document.getElementById('thumbFile').click()">
           <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/></svg>
           <span class="upload-label" id="thumbLabel">Upload image</span>
@@ -323,6 +327,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       </div>
       <div class="field">
         <label>Final video version</label>
+        <div class="upload-preview" id="vidPreview" style="display:none"></div>
         <div class="upload-box" id="vidBox" onclick="document.getElementById('vidFile').click()">
           <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/></svg>
           <span class="upload-label" id="vidLabel">Upload video</span>
@@ -514,14 +519,21 @@ async function init(){
   }
 }
 
+function encodeSharingUrl(url){
+  return 'u!'+btoa(url).replace(/=/g,'').replace(/\//g,'_').replace(/\+/g,'-');
+}
+
 async function refreshDisplayUrls(){
-  const toRefresh = cards.filter(c=>c.thumbItemId||c.vidItemId);
-  await Promise.all(toRefresh.map(async c=>{
+  await Promise.all(cards.map(async c=>{
     if(c.thumbItemId){
       try{const m=await apiCall(`/me/drive/items/${c.thumbItemId}`);c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}catch(e){}
+    }else if(c.thumbUrl&&!c.thumbDisplayUrl){
+      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.id;c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||null;}catch(e){}
     }
     if(c.vidItemId){
       try{const m=await apiCall(`/me/drive/items/${c.vidItemId}`);c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||c.vidDisplayUrl;}catch(e){}
+    }else if(c.vidUrl&&!c.vidDisplayUrl){
+      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.id;c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||null;}catch(e){}
     }
   }));
 }
@@ -710,6 +722,19 @@ function renderAll(){
   });
 }
 
+function setPreview(type,url,name){
+  const prev=document.getElementById(type+'Preview');
+  if(!prev)return;
+  const su=safeUrl(url);
+  if(!su){prev.style.display='none';prev.innerHTML='';return;}
+  if(type==='thumb'){
+    prev.innerHTML=`<img src="${escHtml(su)}" onclick="openLightbox('img',${JSON.stringify(su)},${JSON.stringify(name||'')})" onerror="this.parentElement.style.display='none'">`;
+  }else{
+    prev.innerHTML=`<div class="upload-preview-vid" onclick="openLightbox('vid',${JSON.stringify(su)},${JSON.stringify(name||'')})"><span style="font-size:22px">▶</span><span>Preview video</span></div>`;
+  }
+  prev.style.display='block';
+}
+
 function resetModal(){
   thumbOneDriveUrl=null;vidOneDriveUrl=null;
   thumbItemId=null;vidItemId=null;
@@ -724,6 +749,7 @@ function resetModal(){
   ['thumbStatus','vidStatus','thumbLink','vidLink'].forEach(id=>document.getElementById(id).textContent='');
   document.getElementById('thumbLabel').textContent='Upload image';
   document.getElementById('vidLabel').textContent='Upload video';
+  ['thumbPreview','vidPreview'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.innerHTML='';});
 }
 
 function openAdd(stage){
@@ -764,6 +790,7 @@ function openEdit(id){
     document.getElementById('thumbStatus').textContent='File uploaded ✓';
     document.getElementById('thumbLabel').textContent='Change image';
     document.getElementById('thumbLink').innerHTML=`<a href="${c.thumbUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+    setPreview('thumb',thumbDisplayUrl,c.name);
   }
   if(c.vidUrl){
     vidItemId=c.vidItemId||null;
@@ -771,6 +798,7 @@ function openEdit(id){
     document.getElementById('vidStatus').textContent='File uploaded ✓';
     document.getElementById('vidLabel').textContent='Change video';
     document.getElementById('vidLink').innerHTML=`<a href="${c.vidUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+    setPreview('vid',vidDisplayUrl,c.name);
   }
   document.getElementById('modalBg').classList.add('open');
 }
@@ -797,6 +825,8 @@ async function handleUpload(file,type){
     }
     statusEl.textContent='Uploaded ✓';
     linkEl.innerHTML=`<a href="${result.shareUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+    const curName=document.getElementById('fName').value||'';
+    setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,curName);
     showToast('File uploaded to OneDrive','success');
   }catch(e){
     statusEl.className='upload-status error';
