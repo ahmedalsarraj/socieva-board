@@ -10,9 +10,9 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0f0f0f;--bg2:#161616;--bg3:#1e1e1e;--bg4:#252525;
-  --border:#2a2a2a;--border2:#333;
-  --text:#f0f0f0;--text2:#888;--text3:#555;
+  --bg:#06152e;--bg2:rgba(7,20,48,0.30);--bg3:rgba(12,34,76,0.30);--bg4:rgba(59,130,246,0.12);
+  --border:rgba(147,197,253,0.12);--border2:rgba(191,219,254,0.24);
+  --text:#f4f8ff;--text2:#b8c8e8;--text3:#7290bd;
   --blue:#3b82f6;--blue2:#1d4ed8;
   --script:#2a2218;--script-border:#5a4a2a;--script-txt:#e8c97a;
   --rec:#1a2535;--rec-border:#2a4a6a;--rec-txt:#7ab8e8;
@@ -22,21 +22,34 @@
   --font:'DM Sans',sans-serif;
   --mono:'DM Mono',monospace;
 }
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+html{background:#06152e}
+body{
+  font-family:var(--font);
+  background:
+    radial-gradient(circle at 12% -8%,rgba(59,130,246,0.30),transparent 34%),
+    radial-gradient(circle at 78% 10%,rgba(125,211,252,0.14),transparent 30%),
+    linear-gradient(135deg,#06152e 0%,#08224e 48%,#0b3f81 100%);
+  background-attachment:fixed;
+  color:var(--text);
+  min-height:100vh;
+  font-size:14px;
+}
 
 /* LOGIN */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:2rem}
-.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:3rem;text-align:center;max-width:400px;width:90%}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:3rem;text-align:center;max-width:400px;width:90%;backdrop-filter:blur(18px);box-shadow:0 24px 80px rgba(0,0,0,0.24)}
 .login-logo{font-size:13px;font-weight:500;color:var(--text2);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:2rem}
 .login-title{font-size:28px;font-weight:300;color:var(--text);margin-bottom:0.5rem;letter-spacing:-0.02em}
 .login-sub{font-size:14px;color:var(--text2);margin-bottom:2.5rem;line-height:1.6}
 .btn-login{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:500;font-family:var(--font);cursor:pointer;transition:background 0.15s}
 .btn-login:hover{background:var(--blue2)}
+.btn-demo{margin-top:10px;background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-demo:hover{background:var(--bg3);border-color:var(--border2);color:var(--text)}
 .ms-icon{width:18px;height:18px;flex-shrink:0}
 
 /* APP */
 #app{display:none;min-height:100vh}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;backdrop-filter:blur(18px)}
 .topbar-left{display:flex;align-items:center;gap:16px}
 .brand{font-size:13px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--text2)}
 .brand span{color:var(--text)}
@@ -57,7 +70,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 
 /* STATS */
 .stats{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
-.stat{flex:1;padding:12px 20px;background:var(--bg2);text-align:center}
+.stat{flex:1;padding:12px 20px;background:var(--bg2);text-align:center;backdrop-filter:blur(14px)}
 .stat-num{font-size:20px;font-weight:300;color:var(--text);font-variant-numeric:tabular-nums}
 .stat-label{font-size:11px;color:var(--text3);margin-top:2px;letter-spacing:0.05em;text-transform:uppercase}
 
@@ -84,8 +97,8 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .s3 .col-count{background:var(--ready-border);color:var(--ready-txt)}
 .s4 .col-count{background:var(--posted-border);color:var(--posted-txt)}
 .cards{display:flex;flex-direction:column;gap:8px}
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:border-color 0.15s}
-.card:hover{border-color:var(--border2)}
+.card{background:rgba(3,12,30,0.58);border:1px solid rgba(147,197,253,0.22);border-radius:12px;padding:14px;cursor:pointer;transition:border-color 0.15s,background 0.15s;backdrop-filter:blur(16px);box-shadow:0 18px 50px rgba(0,0,0,0.24)}
+.card:hover{border-color:rgba(191,219,254,0.42);background:rgba(4,16,40,0.66)}
 .card-name{font-size:13px;font-weight:500;color:var(--text);margin-bottom:10px;line-height:1.4}
 .card-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .tag{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:500;letter-spacing:0.03em}
@@ -107,24 +120,35 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .meta-v.green{color:#5ae8a0}
 .meta-v.red{color:#f87171}
 .meta-v.amber{color:#e8a83b}
-.card-thumb{width:100%;height:80px;border-radius:8px;overflow:hidden;margin-bottom:10px;background:var(--bg3);display:flex;align-items:center;justify-content:center}
-.card-thumb img{width:100%;height:100%;object-fit:cover}
-.thumb-placeholder{font-size:11px;color:var(--text3)}
+.card-media{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.card-media-item{width:100%;aspect-ratio:9/16;border-radius:8px;overflow:hidden;background:rgba(4,13,31,0.66);border:1px solid rgba(147,197,253,0.20);position:relative;display:flex;align-items:center;justify-content:center}
+.card-media-item.has-file{cursor:zoom-in;border-color:var(--border2)}
+.card-media-item img,.card-media-item video{width:100%;height:100%;object-fit:cover;display:block}
+.card-media-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.2);color:#fff;font-size:24px;text-shadow:0 1px 6px rgba(0,0,0,0.65)}
+.card-media-empty{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:0.05em}
+.card-media-empty svg{width:24px;height:24px;opacity:0.45}
+.card-media-caption{position:absolute;left:6px;right:6px;bottom:6px;padding:3px 5px;border-radius:4px;background:rgba(0,0,0,0.55);color:#f0f0f0;font-size:9px;text-align:center;text-transform:uppercase;letter-spacing:0.04em}
+.card-thumb{width:100%;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--bg3);border:1px solid var(--border);margin-bottom:10px}
+.card-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3)}
 .card-hr{border:none;border-top:1px solid var(--border);margin:8px 0}
 .card-footer{display:flex;align-items:center;justify-content:space-between}
 .avatar-sm{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:#fff;flex-shrink:0}
-.file-indicators{display:flex;gap:5px;align-items:center}
-.file-dot{width:7px;height:7px;border-radius:50%}
-.file-dot.has{background:#5ae8a0}
-.file-dot.none{background:var(--border2)}
-.file-label{font-size:10px;color:var(--text3)}
+.file-indicators{display:flex;align-items:center;gap:6px;min-height:18px}
+.file-dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--border2);background:transparent;flex-shrink:0}
+.file-dot.has{background:#5ae8a0;border-color:#5ae8a0}
+.file-dot.none{background:var(--bg4)}
+.file-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em}
+.show-more-btn{width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);font-size:12px;color:var(--text2);cursor:pointer;font-family:var(--font);transition:all 0.15s}
+.show-more-btn:hover{border-color:var(--border2);background:var(--bg3);color:var(--text)}
 .add-card-btn{width:100%;padding:9px;border-radius:8px;border:1px dashed var(--border);background:transparent;font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--font);margin-top:4px;transition:all 0.15s}
 .add-card-btn:hover{border-color:var(--border2);color:var(--text2)}
 
 /* MODAL */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;overflow-y:auto;padding:2rem 1rem}
 .modal-bg.open{display:block}
-.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:560px;max-width:100%;margin:0 auto;padding:0;overflow:hidden}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:560px;max-width:100%;margin:0 auto;padding:0;overflow:hidden;backdrop-filter:blur(18px);box-shadow:0 24px 90px rgba(0,0,0,0.32)}
+.settings-modal{width:780px}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid var(--border)}
 .modal-title{font-size:15px;font-weight:500;color:var(--text)}
 .modal-close{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;font-family:var(--font);padding:2px 6px;border-radius:4px;transition:color 0.15s}
@@ -141,6 +165,18 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
 .field select option{background:var(--bg3)}
 .field textarea{resize:vertical;min-height:70px;line-height:1.5}
+.settings-help{font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px}
+.settings-list{display:flex;flex-direction:column;gap:8px}
+.settings-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px}
+.settings-row-main{display:flex;flex-direction:column;gap:8px;min-width:0}
+.settings-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text);font-family:var(--font);outline:none;width:100%}
+.settings-input:focus{border-color:var(--border2)}
+.role-checks{display:flex;gap:10px;flex-wrap:wrap}
+.role-check{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);cursor:pointer;user-select:none}
+.role-check input{accent-color:var(--blue)}
+.settings-add-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}
+.settings-delete{padding:7px 10px;border-radius:8px;border:1px solid #7f1d1d;background:transparent;color:#f87171;font-size:12px;font-family:var(--font);cursor:pointer}
+.settings-delete:hover{background:#7f1d1d20}
 .upload-box{background:var(--bg3);border:1px dashed var(--border);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:border-color 0.15s;min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
 .upload-box:hover{border-color:var(--border2)}
 .upload-box.uploading{border-color:var(--blue);opacity:0.7}
@@ -203,6 +239,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       </svg>
       Sign in with Microsoft
     </button>
+    <button class="btn-login btn-demo" id="demoBtn">Preview without login</button>
   </div>
 </div>
 
@@ -243,6 +280,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <option value="Saad">Saad</option>
       </select>
       <button class="btn btn-primary" id="openAddBtn">+ New video</button>
+      <button class="btn" id="openSettingsBtn">Settings</button>
       <span id="syncDot" style="width:6px;height:6px;border-radius:50%;background:var(--border2);display:inline-block;flex-shrink:0;transition:background 0.4s" title="Sync status"></span>
       <div class="user-avatar" id="userAvatar" title="Sign out">?</div>
     </div>
@@ -312,7 +350,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <select id="fApprove"><option value="">—</option><option>Ahmed</option><option>Mustafa</option><option>Sara</option></select></div>
     </div>
 
-    <div class="section-title">Files (uploaded to OneDrive)</div>
+    <div class="section-title" id="filesSectionTitle">Files (uploaded to OneDrive)</div>
     <div class="field-grid">
       <div class="field">
         <label>Thumbnail / photos</label>
@@ -361,21 +399,61 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 </div>
 </div>
 
+<!-- SETTINGS MODAL -->
+<div class="modal-bg" id="settingsBg">
+<div class="modal settings-modal">
+  <div class="modal-header">
+    <span class="modal-title">Board settings</span>
+    <button class="modal-close" id="closeSettingsBtn">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="section-title">People & roles</div>
+    <div class="settings-help">Choose which names appear under Presenter, Assigned to, Editor, and Approved by.</div>
+    <div class="settings-list" id="peopleSettingsList"></div>
+    <div class="settings-add-row">
+      <input class="settings-input" type="text" id="newPersonName" placeholder="Person name">
+      <button class="btn" id="addPersonBtn">+ Add person</button>
+    </div>
+
+    <div class="section-title">Categories</div>
+    <div class="settings-help">Categories control the board filter and the category field on each video.</div>
+    <div class="settings-list" id="categorySettingsList"></div>
+    <div class="settings-add-row">
+      <input class="settings-input" type="text" id="newCategoryName" placeholder="Category name">
+      <button class="btn" id="addCategoryBtn">+ Add category</button>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn" id="cancelSettingsBtn">Cancel</button>
+    <button class="btn btn-primary" id="saveSettingsBtn">Save settings</button>
+  </div>
+</div>
+</div>
+
 <script>
 const CLIENT_ID = 'd16994f5-e9f0-49d6-8ee6-3e1c3ad57bf0';
 const TENANT_ID = '4cd6b3cc-09bd-467e-a6ee-78d2c7926a5d';
-const SCOPES = ['Files.ReadWrite','Sites.ReadWrite.All','User.Read','offline_access'];
+const SCOPES = ['Files.ReadWrite','User.Read','offline_access'];
 const FOLDER_NAME = 'Socieva-Board';
 const DATA_FILE = 'board-data.json';
+const DEMO_STORAGE_KEY = 'socieva-board-demo-data';
+const DEMO_DB_NAME = 'socieva-board-demo-files';
+const DEMO_DB_STORE = 'files';
+const DEMO_ACCOUNT = {name:'Preview User',username:'preview@socieva.local'};
+const SETTINGS_ADMIN_EMAILS = [
+  'ahmed@socievastudio.com',
+  'sara@socievastudio.com'
+];
 
 const msalConfig = {
   auth:{clientId:CLIENT_ID,authority:`https://login.microsoftonline.com/${TENANT_ID}`,redirectUri:window.location.origin+window.location.pathname},
   cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
 };
 
-const msalApp = new msal.PublicClientApplication(msalConfig);
+const msalApp = window.msal ? new msal.PublicClientApplication(msalConfig) : null;
 let accessToken = null;
 let currentUser = null;
+let demoMode = false;
 let cards = [];
 let editId = null;
 let thumbOneDriveUrl = null;
@@ -384,18 +462,191 @@ let thumbItemId = null;
 let vidItemId = null;
 let thumbDisplayUrl = null;
 let vidDisplayUrl = null;
+let demoObjectUrls = [];
+let boardSettings = null;
+let settingsDraft = null;
 
 const STAGES = ['Script','Recording','Under editing','Ready to post','Posted'];
+const DEFAULT_CATEGORIES = ['Education','Market','Motivation','Challenge','Funny','Branding','Story','Top XXX','General'];
+const ROLE_DEFS = [
+  {key:'presenter',label:'Presenter'},
+  {key:'assigned',label:'Assigned'},
+  {key:'editor',label:'Editor'},
+  {key:'approver',label:'Approver'}
+];
 const CAT_TAG = {Education:'tag-edu',Market:'tag-mkt',Motivation:'tag-mot',Funny:'tag-fun','Top XXX':'tag-top',Branding:'tag-brd',Challenge:'tag-chl',General:'tag-gen',Story:'tag-str'};
 const AV_COLORS = {Ahmed:'#1d4ed8',Sara:'#6d28d9',Aya:'#b45309',Mostafa:'#065f46',Saad:'#7c2d12',Mustafa:'#1e3a5f'};
 const PRI_COLORS = {High:'#f87171',Medium:'#e8a83b',Low:'#5ae8a0'};
 const PRI_ORDER = {High:0,Medium:1,Low:2};
+const CARD_COLLAPSE_LIMIT = 4;
 
 function initials(n){if(!n)return'?';const p=n.trim().split(' ');return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():n.slice(0,2).toUpperCase()}
 function fmtDate(d){if(!d)return'';const p=d.split('-');const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(p[2])+' '+m[parseInt(p[1])-1]}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function escHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-function safeUrl(u){if(!u)return'';const s=String(u).trim();return(s.startsWith('https://')||s.startsWith('http://'))?s:''}
+function safeUrl(u){if(!u)return'';const s=String(u).trim();return(s.startsWith('https://')||s.startsWith('http://')||s.startsWith('blob:')||s.startsWith('data:image/')||s.startsWith('data:video/'))?s:''}
+function jsArg(s){return escHtml(JSON.stringify(String(s??'')))}
+function norm(s){return String(s||'').trim().toLowerCase()}
+function pathPart(s){return encodeURIComponent(String(s))}
+function drivePath(...parts){return parts.map(pathPart).join('/')}
+function isDemoRequested(){return new URLSearchParams(window.location.search).get('demo')==='1'}
+function accountIdentifiers(account){
+  if(!account)return[];
+  const claims=account.idTokenClaims||{};
+  return [account.username,account.name,claims.preferred_username,claims.email,claims.upn].map(norm).filter(Boolean);
+}
+function canManageSettings(){
+  if(demoMode)return true;
+  const admins=SETTINGS_ADMIN_EMAILS.map(norm).filter(Boolean);
+  return accountIdentifiers(currentUser).some(id=>admins.includes(id));
+}
+function updateSettingsAccess(){
+  const btn=document.getElementById('openSettingsBtn');
+  if(!btn)return;
+  const allowed=canManageSettings();
+  btn.style.display=allowed?'':'none';
+  btn.disabled=!allowed;
+  if(!allowed&&document.getElementById('settingsBg').classList.contains('open'))closeSettings();
+}
+function dateOffset(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
+function uniqueList(values){
+  const seen=new Set();
+  return values.map(v=>String(v||'').trim()).filter(v=>{
+    if(!v||seen.has(v))return false;
+    seen.add(v);
+    return true;
+  });
+}
+function defaultSettings(){
+  return {
+    categories:[...DEFAULT_CATEGORIES],
+    people:[
+      {id:'ahmed',name:'Ahmed',roles:['assigned','editor','approver']},
+      {id:'sara',name:'Sara',roles:['presenter','assigned','editor','approver']},
+      {id:'aya',name:'Aya',roles:['assigned']},
+      {id:'mostafa',name:'Mostafa',roles:['assigned','editor']},
+      {id:'saad',name:'Saad',roles:['presenter','assigned']},
+      {id:'mustafa',name:'Mustafa',roles:['presenter','approver']}
+    ]
+  };
+}
+function normalizeSettings(input){
+  const base=defaultSettings();
+  const categories=uniqueList(Array.isArray(input?.categories)?input.categories:base.categories);
+  const peopleSource=Array.isArray(input?.people)?input.people:base.people;
+  const people=peopleSource.map(p=>({
+    id:String(p.id||uid()),
+    name:String(p.name||'').trim(),
+    roles:Array.isArray(p.roles)?p.roles.filter(r=>ROLE_DEFS.some(def=>def.key===r)):[]
+  })).filter(p=>p.name);
+  return {
+    categories:categories.length?categories:[...DEFAULT_CATEGORIES],
+    people:people.length?people:base.people
+  };
+}
+function getSettings(){
+  if(!boardSettings)boardSettings=defaultSettings();
+  return boardSettings;
+}
+function cloneSettings(settings){
+  return JSON.parse(JSON.stringify(settings));
+}
+function parseBoardData(data){
+  if(Array.isArray(data)){
+    cards=data;
+    boardSettings=defaultSettings();
+    return;
+  }
+  cards=Array.isArray(data?.cards)?data.cards:[];
+  boardSettings=normalizeSettings(data?.settings);
+}
+function buildBoardPayload(){
+  return {
+    version:2,
+    settings:normalizeSettings(getSettings()),
+    cards:demoMode?serializeDemoCards():cards
+  };
+}
+function demoSeedCards(){
+  return [
+    {id:'demo-script',name:'Gold market opening hook',format:'Short',category:'Market',presenter:'Mustafa',assign:'Ahmed',editor:'Mostafa',priority:'High',postDate:dateOffset(2),dueDate:dateOffset(1),channel:'Instagram Reels',segment:'Morning Market',script:'',seo:'#gold #trading #markets',notes:'Demo card for local preview.',compliance:'Pending',approve:'',stage:0,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
+    {id:'demo-recording',name:'How leverage works in simple Arabic',format:'Long',category:'Education',presenter:'Sara',assign:'Sara',editor:'Ahmed',priority:'Medium',postDate:dateOffset(5),dueDate:dateOffset(3),channel:'YouTube',segment:'Education',script:'',seo:'#leverage #education',notes:'Check modal fields, filters, and drag between stages.',compliance:'Approved',approve:'Ahmed',stage:1,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
+    {id:'demo-editing',name:'Trading psychology: avoid revenge trades',format:'Short',category:'Motivation',presenter:'Saad',assign:'Aya',editor:'Sara',priority:'Low',postDate:dateOffset(7),dueDate:dateOffset(4),channel:'TikTok',segment:'Mindset',script:'',seo:'#psychology #riskmanagement',notes:'Demo data is saved in this browser only.',compliance:'Pending',approve:'',stage:2,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
+    {id:'demo-ready',name:'Top 5 market terms beginners confuse',format:'Short',category:'Top XXX',presenter:'Mustafa',assign:'Mostafa',editor:'Mostafa',priority:'High',postDate:dateOffset(1),dueDate:dateOffset(0),channel:'Instagram Reels',segment:'Top 5',script:'',seo:'#tradingterms #beginners',notes:'Ready demo item.',compliance:'Approved',approve:'Sara',stage:3,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
+    {id:'demo-posted',name:'What moved oil this week',format:'Long',category:'Market',presenter:'Sara',assign:'Saad',editor:'Ahmed',priority:'Medium',postDate:dateOffset(-1),dueDate:dateOffset(-2),channel:'YouTube Shorts',segment:'Weekly recap',script:'',seo:'#oil #weeklyrecap',notes:'Posted demo item.',compliance:'Approved',approve:'Ahmed',stage:4,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null}
+  ];
+}
+function openDemoDb(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DEMO_DB_NAME,1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(DEMO_DB_STORE)){
+        db.createObjectStore(DEMO_DB_STORE,{keyPath:'id'});
+      }
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function demoDbPut(record){
+  const db=await openDemoDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DEMO_DB_STORE,'readwrite');
+    tx.objectStore(DEMO_DB_STORE).put(record);
+    tx.oncomplete=()=>{db.close();resolve();};
+    tx.onerror=()=>{db.close();reject(tx.error);};
+  });
+}
+async function demoDbGet(id){
+  const db=await openDemoDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DEMO_DB_STORE,'readonly');
+    const req=tx.objectStore(DEMO_DB_STORE).get(id);
+    req.onsuccess=()=>resolve(req.result||null);
+    req.onerror=()=>reject(req.error);
+    tx.oncomplete=()=>db.close();
+  });
+}
+function rememberDemoObjectUrl(url){
+  demoObjectUrls.push(url);
+  return url;
+}
+function serializeDemoCards(){
+  return cards.map(c=>({
+    ...c,
+    thumbDisplayUrl:null,
+    vidDisplayUrl:null
+  }));
+}
+async function hydrateDemoFiles(){
+  demoObjectUrls.forEach(url=>URL.revokeObjectURL(url));
+  demoObjectUrls=[];
+  await Promise.all(cards.map(async c=>{
+    if(c.thumbItemId){
+      const record=await demoDbGet(c.thumbItemId);
+      if(record&&record.blob){
+        c.thumbUrl=`demo-file:${c.thumbItemId}`;
+        c.thumbDisplayUrl=rememberDemoObjectUrl(URL.createObjectURL(record.blob));
+      }else{
+        c.thumbUrl=null;c.thumbItemId=null;c.thumbDisplayUrl=null;
+      }
+    }else if(String(c.thumbUrl||'').startsWith('blob:')){
+      c.thumbUrl=null;c.thumbDisplayUrl=null;
+    }
+    if(c.vidItemId){
+      const record=await demoDbGet(c.vidItemId);
+      if(record&&record.blob){
+        c.vidUrl=`demo-file:${c.vidItemId}`;
+        c.vidDisplayUrl=rememberDemoObjectUrl(URL.createObjectURL(record.blob));
+      }else{
+        c.vidUrl=null;c.vidItemId=null;c.vidDisplayUrl=null;
+      }
+    }else if(String(c.vidUrl||'').startsWith('blob:')){
+      c.vidUrl=null;c.vidDisplayUrl=null;
+    }
+  }));
+}
 function dueDateStatus(dueDate,stage){
   if(!dueDate||stage===4)return null;
   const today=new Date();today.setHours(0,0,0,0);
@@ -408,6 +659,7 @@ function dueDateStatus(dueDate,stage){
 
 let dragCardId=null;
 let pendingDelete=null;
+let expandedStages=new Set();
 
 function setSyncDot(state){
   const d=document.getElementById('syncDot');
@@ -428,6 +680,7 @@ function showToast(msg,type=''){
 function setLoading(pct){document.getElementById('loadingBar').style.width=pct+'%'}
 
 async function getToken(){
+  if(!msalApp) throw new Error('Microsoft auth library is not loaded');
   const accounts = msalApp.getAllAccounts();
   if(!accounts.length) throw new Error('Not signed in');
   try{
@@ -451,7 +704,9 @@ async function apiCall(url,method='GET',body=null,isBlob=false){
   const res = await fetch('https://graph.microsoft.com/v1.0'+url,opts);
   if(!res.ok){
     const err=await res.text();
-    throw new Error(err);
+    const e = new Error(err || `${res.status} ${res.statusText}`);
+    e.status = res.status;
+    throw e;
   }
   if(res.status===204)return null;
   if(isBlob)return res.blob();
@@ -460,47 +715,95 @@ async function apiCall(url,method='GET',body=null,isBlob=false){
 
 async function ensureFolder(){
   try{
-    await apiCall(`/me/drive/root:/${FOLDER_NAME}`);
+    await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME)}`);
   }catch(e){
+    if(e.status!==404)throw e;
     await apiCall('/me/drive/root/children','POST',{name:FOLDER_NAME,folder:{},['@microsoft.graph.conflictBehavior']:'rename'});
   }
 }
 
-async function loadData(){
+async function ensureSubfolder(name){
+  await ensureFolder();
   try{
-    const meta = await apiCall(`/me/drive/root:/${FOLDER_NAME}/${DATA_FILE}`);
+    await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,name)}`);
+  }catch(e){
+    if(e.status!==404)throw e;
+    try{
+      await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME)}:/children`,'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});
+    }catch(createErr){
+      if(createErr.status!==409)throw createErr;
+    }
+  }
+}
+
+async function loadData(){
+  if(demoMode){
+    try{
+      const raw = localStorage.getItem(DEMO_STORAGE_KEY);
+      if(raw)parseBoardData(JSON.parse(raw));
+      else{cards = demoSeedCards();boardSettings=defaultSettings();}
+      if(!raw)localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify(buildBoardPayload(),null,2));
+      await hydrateDemoFiles();
+      localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify(buildBoardPayload(),null,2));
+    }catch(e){
+      cards = demoSeedCards();
+      boardSettings=defaultSettings();
+    }
+    return;
+  }
+  try{
+    const meta = await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}`);
     const blob = await apiCall(`/me/drive/items/${meta.id}/content`,undefined,null,true);
     const text = await blob.text();
-    cards = JSON.parse(text);
+    parseBoardData(JSON.parse(text));
   }catch(e){
+    if(e.status!==404)throw e;
     cards = [];
+    boardSettings=defaultSettings();
   }
 }
 
 async function saveData(){
-  const json = JSON.stringify(cards,null,2);
+  if(demoMode){
+    localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify(buildBoardPayload(),null,2));
+    return;
+  }
+  const json = JSON.stringify(buildBoardPayload(),null,2);
   const blob = new Blob([json],{type:'application/json'});
-  await apiCall(`/me/drive/root:/${FOLDER_NAME}/${DATA_FILE}:/content`,'PUT',blob);
+  await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}:/content`,'PUT',blob);
 }
 
 async function uploadFile(file,subfolder){
-  const path = `${FOLDER_NAME}/${subfolder}/${file.name}`;
-  const buffer = await file.arrayBuffer();
+  if(demoMode){
+    const itemId='demo-'+uid();
+    await demoDbPut({id:itemId,name:file.name,type:file.type,blob:file,updatedAt:Date.now(),subfolder});
+    const url = rememberDemoObjectUrl(URL.createObjectURL(file));
+    return {
+      shareUrl:`demo-file:${itemId}`,
+      itemId,
+      downloadUrl:url
+    };
+  }
+  await ensureSubfolder(subfolder);
+  const path = drivePath(FOLDER_NAME,subfolder,file.name);
   let res;
   if(file.size < 4*1024*1024){
-    res = await apiCall(`/me/drive/root:/${path}:/content`,'PUT',buffer);
+    res = await apiCall(`/me/drive/root:/${path}:/content`,'PUT',file);
   }else{
     const session = await apiCall(`/me/drive/root:/${path}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
-    const chunkSize = 3*1024*1024;
+    const chunkSize = 320*1024*10;
     let start=0;
-    while(start<buffer.byteLength){
-      const end=Math.min(start+chunkSize,buffer.byteLength);
-      const chunk=buffer.slice(start,end);
-      const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${buffer.byteLength}`,'Content-Length':chunk.byteLength},body:chunk});
-      res=await r.json();
+    while(start<file.size){
+      const end=Math.min(start+chunkSize,file.size);
+      const chunk=file.slice(start,end);
+      const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:chunk});
+      const text=await r.text();
+      if(!r.ok)throw new Error(text || `Upload failed: ${r.status} ${r.statusText}`);
+      res=text?JSON.parse(text):null;
       start=end;
     }
   }
+  if(!res||!res.id)throw new Error('Upload finished without a OneDrive item id');
   const shareRes = await apiCall(`/me/drive/items/${res.id}/createLink`,'POST',{type:'view',scope:'organization'});
   return {
     shareUrl: shareRes.link.webUrl,
@@ -510,6 +813,14 @@ async function uploadFile(file,subfolder){
 }
 
 async function init(){
+  if(isDemoRequested()){
+    await startApp(DEMO_ACCOUNT,{demo:true});
+    return;
+  }
+  if(!msalApp){
+    showToast('Microsoft login is unavailable. Use preview mode.','error');
+    return;
+  }
   await msalApp.initialize();
   const res = await msalApp.handleRedirectPromise();
   if(res){accessToken=res.accessToken}
@@ -524,6 +835,7 @@ function encodeSharingUrl(url){
 }
 
 async function refreshDisplayUrls(){
+  if(demoMode)return;
   await Promise.all(cards.map(async c=>{
     if(c.thumbItemId){
       try{const m=await apiCall(`/me/drive/items/${c.thumbItemId}`);c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}catch(e){}
@@ -538,48 +850,72 @@ async function refreshDisplayUrls(){
   }));
 }
 
-async function startApp(account){
+async function startApp(account,opts={}){
+  demoMode = !!opts.demo;
   currentUser = account;
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('userAvatar').textContent=initials(account.name||account.username);
-  document.getElementById('userAvatar').title=(account.name||account.username)+' — click to sign out';
+  document.getElementById('userAvatar').title=demoMode?'Exit preview':(account.name||account.username)+' — click to sign out';
+  document.querySelector('.board-label').textContent=demoMode?'Capital.com Arabic · Local preview':'Capital.com Arabic';
+  document.getElementById('filesSectionTitle').textContent=demoMode?'Files (local preview only)':'Files (uploaded to OneDrive)';
   setLoading(30);
-  await ensureFolder();
-  setLoading(70);
-  await loadData();
-  setLoading(85);
-  await refreshDisplayUrls();
+  if(demoMode){
+    await loadData();
+  }else{
+    await ensureFolder();
+    setLoading(70);
+    await loadData();
+    setLoading(85);
+    await refreshDisplayUrls();
+  }
   setLoading(100);
   setTimeout(()=>setLoading(0),500);
+  refreshOptionLists();
+  updateSettingsAccess();
   renderAll();
 
-  // Polling: تحديث صامت كل دقيقتين للبيانات فقط
-  setInterval(async()=>{
-    if(!currentUser)return;
-    if(document.getElementById('modalBg').classList.contains('open'))return;
-    if(pendingDelete)return;
-    setSyncDot('syncing');
-    try{await loadData();renderAll();setSyncDot('ok');}
-    catch(e){setSyncDot('error');}
-  },2*60*1000);
+  if(!demoMode){
+    // Polling: تحديث صامت كل دقيقتين للبيانات فقط
+    setInterval(async()=>{
+      if(!currentUser)return;
+      if(document.getElementById('modalBg').classList.contains('open'))return;
+      if(pendingDelete)return;
+      setSyncDot('syncing');
+      try{await loadData();refreshOptionLists();renderAll();setSyncDot('ok');}
+      catch(e){setSyncDot('error');}
+    },2*60*1000);
 
-  // تجديد display URLs كل 50 دقيقة (قبل انتهاء الساعة)
-  setInterval(async()=>{
-    if(!currentUser)return;
-    try{await refreshDisplayUrls();renderAll();}catch(e){}
-  },50*60*1000);
+    // تجديد display URLs كل 50 دقيقة (قبل انتهاء الساعة)
+    setInterval(async()=>{
+      if(!currentUser)return;
+      try{await refreshDisplayUrls();renderAll();}catch(e){}
+    },50*60*1000);
+  }
 }
 
 document.getElementById('loginBtn').addEventListener('click',async()=>{
+  if(!msalApp){showToast('Microsoft login is unavailable. Use preview mode.','error');return;}
   try{
     const res = await msalApp.loginPopup({scopes:SCOPES});
     await startApp(res.account);
   }catch(e){showToast('Login failed: '+e.message,'error')}
 });
 
+document.getElementById('demoBtn').addEventListener('click',()=>{
+  const url = new URL(window.location.href);
+  url.searchParams.set('demo','1');
+  window.location.href = url.toString();
+});
+
 document.getElementById('userAvatar').addEventListener('click',()=>{
-  msalApp.logoutPopup();
+  if(demoMode){
+    const url = new URL(window.location.href);
+    url.searchParams.delete('demo');
+    window.location.href = url.toString();
+    return;
+  }
+  if(msalApp)msalApp.logoutPopup();
   location.reload();
 });
 
@@ -597,6 +933,162 @@ function getFiltered(){
   });
 }
 
+function usedValues(field){
+  return cards.map(c=>c[field]).filter(Boolean);
+}
+function peopleForRole(role,field){
+  const settings=getSettings();
+  return uniqueList([
+    ...settings.people.filter(p=>p.roles.includes(role)).map(p=>p.name),
+    ...usedValues(field)
+  ]);
+}
+function categoriesForOptions(){
+  return uniqueList([...getSettings().categories,...usedValues('category')]);
+}
+function setSelectOptions(id,values,blankLabel){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const previous=el.value;
+  const opts=uniqueList(values);
+  el.innerHTML=[
+    blankLabel!=null?`<option value="">${escHtml(blankLabel)}</option>`:'',
+    ...opts.map(v=>`<option value="${escHtml(v)}">${escHtml(v)}</option>`)
+  ].join('');
+  if(previous&&opts.includes(previous))el.value=previous;
+  else if(blankLabel!=null)el.value='';
+  else if(opts.length)el.value=opts[0];
+}
+function refreshOptionLists(){
+  const categories=categoriesForOptions();
+  setSelectOptions('filterCat',categories,'All categories');
+  setSelectOptions('filterPresenter',peopleForRole('presenter','presenter'),'All presenters');
+  setSelectOptions('filterAssign',peopleForRole('assigned','assign'),'All assigned');
+  setSelectOptions('fCategory',categories,null);
+  setSelectOptions('fPresenter',peopleForRole('presenter','presenter'),'—');
+  setSelectOptions('fAssign',peopleForRole('assigned','assign'),'—');
+  setSelectOptions('fEditor',peopleForRole('editor','editor'),'—');
+  setSelectOptions('fApprove',peopleForRole('approver','approve'),'—');
+}
+function avatarColor(name){
+  if(!name)return'#333';
+  if(AV_COLORS[name])return AV_COLORS[name];
+  let hash=0;
+  for(let i=0;i<name.length;i++)hash=(hash*31+name.charCodeAt(i))>>>0;
+  const palette=['#1d4ed8','#6d28d9','#b45309','#065f46','#7c2d12','#0f766e','#be123c','#4338ca'];
+  return palette[hash%palette.length];
+}
+function openSettings(){
+  if(!canManageSettings()){
+    showToast('Settings are restricted for this account','error');
+    return;
+  }
+  settingsDraft=cloneSettings(getSettings());
+  renderSettings();
+  document.getElementById('settingsBg').classList.add('open');
+}
+function closeSettings(){
+  document.getElementById('settingsBg').classList.remove('open');
+  settingsDraft=null;
+}
+function renderSettings(){
+  if(!canManageSettings())return;
+  if(!settingsDraft)return;
+  document.getElementById('peopleSettingsList').innerHTML=settingsDraft.people.map((p,i)=>`
+    <div class="settings-row">
+      <div class="settings-row-main">
+        <input class="settings-input person-name-input" data-index="${i}" value="${escHtml(p.name)}" placeholder="Person name">
+        <div class="role-checks">
+          ${ROLE_DEFS.map(role=>`
+            <label class="role-check">
+              <input type="checkbox" class="person-role-input" data-index="${i}" data-role="${role.key}" ${p.roles.includes(role.key)?'checked':''}>
+              ${escHtml(role.label)}
+            </label>`).join('')}
+        </div>
+      </div>
+      <button class="settings-delete delete-person-btn" data-index="${i}">Delete</button>
+    </div>`).join('');
+  document.getElementById('categorySettingsList').innerHTML=settingsDraft.categories.map((cat,i)=>`
+    <div class="settings-row">
+      <div class="settings-row-main">
+        <input class="settings-input category-name-input" data-index="${i}" value="${escHtml(cat)}" placeholder="Category name">
+      </div>
+      <button class="settings-delete delete-category-btn" data-index="${i}">Delete</button>
+    </div>`).join('');
+
+  document.querySelectorAll('.person-name-input').forEach(el=>{
+    el.addEventListener('input',()=>{settingsDraft.people[parseInt(el.dataset.index)].name=el.value;});
+  });
+  document.querySelectorAll('.person-role-input').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const person=settingsDraft.people[parseInt(el.dataset.index)];
+      const roles=new Set(person.roles);
+      if(el.checked)roles.add(el.dataset.role);
+      else roles.delete(el.dataset.role);
+      person.roles=[...roles];
+    });
+  });
+  document.querySelectorAll('.delete-person-btn').forEach(el=>{
+    el.addEventListener('click',()=>{
+      settingsDraft.people.splice(parseInt(el.dataset.index),1);
+      renderSettings();
+    });
+  });
+  document.querySelectorAll('.category-name-input').forEach(el=>{
+    el.addEventListener('input',()=>{settingsDraft.categories[parseInt(el.dataset.index)]=el.value;});
+  });
+  document.querySelectorAll('.delete-category-btn').forEach(el=>{
+    el.addEventListener('click',()=>{
+      settingsDraft.categories.splice(parseInt(el.dataset.index),1);
+      renderSettings();
+    });
+  });
+}
+function addSettingsPerson(){
+  if(!canManageSettings())return;
+  const input=document.getElementById('newPersonName');
+  const name=input.value.trim();
+  if(!name)return;
+  if(!settingsDraft)settingsDraft=cloneSettings(getSettings());
+  if(!settingsDraft.people.some(p=>p.name.toLowerCase()===name.toLowerCase())){
+    settingsDraft.people.push({id:'person-'+uid(),name,roles:ROLE_DEFS.map(r=>r.key)});
+  }
+  input.value='';
+  renderSettings();
+}
+function addSettingsCategory(){
+  if(!canManageSettings())return;
+  const input=document.getElementById('newCategoryName');
+  const name=input.value.trim();
+  if(!name)return;
+  if(!settingsDraft)settingsDraft=cloneSettings(getSettings());
+  if(!settingsDraft.categories.some(c=>c.toLowerCase()===name.toLowerCase())){
+    settingsDraft.categories.push(name);
+  }
+  input.value='';
+  renderSettings();
+}
+async function saveSettings(){
+  if(!canManageSettings()){
+    showToast('Settings are restricted for this account','error');
+    return;
+  }
+  if(!settingsDraft)return;
+  const btn=document.getElementById('saveSettingsBtn');
+  btn.textContent='Saving...';btn.disabled=true;
+  try{
+    boardSettings=normalizeSettings(settingsDraft);
+    refreshOptionLists();
+    await saveData();
+    closeSettings();
+    renderAll();
+    showToast('Settings saved','success');
+  }catch(e){
+    showToast('Settings save failed: '+e.message,'error');
+  }
+  btn.textContent='Save settings';btn.disabled=false;
+}
+
 function renderStats(){
   const fc=getFiltered();
   const isFiltering=fc.length!==cards.length;
@@ -611,18 +1103,21 @@ function renderStats(){
 }
 
 function renderCard(c){
-  const av=AV_COLORS[c.assign||c.presenter]||'#333';
+  const av=avatarColor(c.assign||c.presenter);
   const ini=escHtml(initials(c.assign||c.presenter||'?'));
   const catCls=CAT_TAG[c.category]||'tag-gen';
   const scriptUrl=safeUrl(c.script);
   const thumbSrc=safeUrl(c.thumbDisplayUrl);
   const vidSrc=safeUrl(c.vidDisplayUrl);
   const dueSt=dueDateStatus(c.dueDate,c.stage);
-  const thumbHtml=thumbSrc
-    ?`<div class="card-thumb" style="cursor:zoom-in" onclick="event.stopPropagation();openLightbox('img',${JSON.stringify(thumbSrc)},${JSON.stringify(c.name||'')})"><img src="${escHtml(thumbSrc)}" onerror="this.parentElement.innerHTML='<span class=thumb-placeholder>Thumbnail</span>'"></div>`
-    :'';
+  const thumbTile=thumbSrc
+    ?`<div class="card-media-item has-file" title="Thumbnail preview" onclick="event.stopPropagation();openLightbox('img',${jsArg(thumbSrc)},${jsArg(c.name||'')})"><img src="${escHtml(thumbSrc)}" onerror="this.parentElement.classList.remove('has-file');this.parentElement.innerHTML='<div class=&quot;card-media-empty&quot;><svg viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.5&quot;><rect x=&quot;3&quot; y=&quot;5&quot; width=&quot;18&quot; height=&quot;14&quot; rx=&quot;2&quot;/><path d=&quot;M3 14l4-4 3 3 4-5 4 6&quot;/></svg><span>Thumbnail</span></div>'"><span class="card-media-caption">Thumbnail</span></div>`
+    :`<div class="card-media-item" title="No thumbnail"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/></svg><span>Thumbnail</span></div></div>`;
+  const videoTile=vidSrc
+    ?`<div class="card-media-item has-file" title="Video preview" onclick="event.stopPropagation();openLightbox('vid',${jsArg(vidSrc)},${jsArg(c.name||'')})"><video src="${escHtml(vidSrc)}" muted playsinline preload="metadata"></video><div class="card-media-play">▶</div><span class="card-media-caption">Video</span></div>`
+    :`<div class="card-media-item" title="No video"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/></svg><span>Video</span></div></div>`;
   return`<div class="card" draggable="true" data-id="${escHtml(c.id)}">
-    ${thumbHtml}
+    <div class="card-media">${thumbTile}${videoTile}</div>
     <div class="card-name">${escHtml(c.name)}</div>
     <div class="card-tags">
       <span class="tag ${catCls}">${escHtml(c.category)||'—'}</span>
@@ -644,11 +1139,6 @@ function renderCard(c){
         <div class="avatar-sm" style="background:${av}">${ini}</div>
         <span style="font-size:11px;color:var(--text3)">${escHtml(c.assign||c.presenter||'—')}</span>
       </div>
-      <div class="file-indicators">
-        <div class="file-dot ${c.thumbUrl?'has':'none'}" title="${c.thumbUrl?'Thumbnail uploaded':'No thumbnail'}"></div>
-        <div class="file-dot ${c.vidUrl?'has':'none'}" title="${c.vidUrl?'Video uploaded':'No video'}"></div>
-        ${vidSrc?`<span style="font-size:10px;color:#3b82f6;cursor:pointer;font-weight:500" onclick="event.stopPropagation();openLightbox('vid',${JSON.stringify(vidSrc)},${JSON.stringify(c.name||'')})">▶ Preview</span>`:`<span class="file-label">files</span>`}
-      </div>
     </div>
   </div>`;
 }
@@ -669,17 +1159,27 @@ function renderAll(){
   const sx=bw?bw.scrollLeft:0;
   renderStats();
   const fc=getFiltered();
-  document.getElementById('board').innerHTML=STAGES.map((s,i)=>`
-    <div class="col">
-      <div class="col-head s${i}">
-        <span class="col-name">${s}</span>
-        <span class="col-count">${fc.filter(c=>c.stage===i).length}</span>
-      </div>
-      <div class="cards" id="col-${i}">
-        ${sortCards(fc.filter(c=>c.stage===i)).map(renderCard).join('')}
-        <button class="add-card-btn" data-stage="${i}">+ Add video</button>
-      </div>
-    </div>`).join('');
+  document.getElementById('board').innerHTML=STAGES.map((s,i)=>{
+    const stageCards=sortCards(fc.filter(c=>c.stage===i));
+    const expanded=expandedStages.has(i);
+    const visibleCards=expanded?stageCards:stageCards.slice(0,CARD_COLLAPSE_LIMIT);
+    const hiddenCount=stageCards.length-visibleCards.length;
+    const toggleHtml=stageCards.length>CARD_COLLAPSE_LIMIT
+      ?`<button class="show-more-btn" data-stage="${i}">${expanded?'Show less':`Show ${hiddenCount} more`}</button>`
+      :'';
+    return`
+      <div class="col">
+        <div class="col-head s${i}">
+          <span class="col-name">${s}</span>
+          <span class="col-count">${stageCards.length}</span>
+        </div>
+        <div class="cards" id="col-${i}">
+          ${visibleCards.map(renderCard).join('')}
+          ${toggleHtml}
+          <button class="add-card-btn" data-stage="${i}">+ Add video</button>
+        </div>
+      </div>`;
+  }).join('');
   if(bw)bw.scrollLeft=sx;
 
   document.querySelectorAll('.card').forEach(el=>{
@@ -720,6 +1220,14 @@ function renderAll(){
   document.querySelectorAll('.add-card-btn').forEach(el=>{
     el.addEventListener('click',()=>openAdd(parseInt(el.dataset.stage)));
   });
+  document.querySelectorAll('.show-more-btn').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const stage=parseInt(el.dataset.stage);
+      if(expandedStages.has(stage))expandedStages.delete(stage);
+      else expandedStages.add(stage);
+      renderAll();
+    });
+  });
 }
 
 function setPreview(type,url,name){
@@ -728,9 +1236,9 @@ function setPreview(type,url,name){
   const su=safeUrl(url);
   if(!su){prev.style.display='none';prev.innerHTML='';return;}
   if(type==='thumb'){
-    prev.innerHTML=`<img src="${escHtml(su)}" onclick="openLightbox('img',${JSON.stringify(su)},${JSON.stringify(name||'')})" onerror="this.parentElement.style.display='none'">`;
+    prev.innerHTML=`<img src="${escHtml(su)}" onclick="openLightbox('img',${jsArg(su)},${jsArg(name||'')})" onerror="this.parentElement.style.display='none'">`;
   }else{
-    prev.innerHTML=`<div class="upload-preview-vid" onclick="openLightbox('vid',${JSON.stringify(su)},${JSON.stringify(name||'')})"><span style="font-size:22px">▶</span><span>Preview video</span></div>`;
+    prev.innerHTML=`<div class="upload-preview-vid" onclick="openLightbox('vid',${jsArg(su)},${jsArg(name||'')})"><span style="font-size:22px">▶</span><span>Preview video</span></div>`;
   }
   prev.style.display='block';
 }
@@ -745,7 +1253,7 @@ function resetModal(){
     if(el.options[0])el.selectedIndex=0;
   });
   document.getElementById('fFormat').value='Short';
-  document.getElementById('fCategory').value='Education';
+  document.getElementById('fCategory').value=categoriesForOptions()[0]||'General';
   ['thumbStatus','vidStatus','thumbLink','vidLink'].forEach(id=>document.getElementById(id).textContent='');
   document.getElementById('thumbLabel').textContent='Upload image';
   document.getElementById('vidLabel').textContent='Upload video';
@@ -784,20 +1292,23 @@ function openEdit(id){
   document.getElementById('fCompliance').value=c.compliance||'';
   document.getElementById('fApprove').value=c.approve||'';
   document.getElementById('fStage').value=c.stage||0;
+  const fileLinkLabel=demoMode?'Preview file':'View on OneDrive';
   if(c.thumbUrl){
+    const thumbViewUrl=safeUrl(demoMode?c.thumbDisplayUrl:c.thumbUrl);
     thumbItemId=c.thumbItemId||null;
     thumbDisplayUrl=c.thumbDisplayUrl||null;
     document.getElementById('thumbStatus').textContent='File uploaded ✓';
     document.getElementById('thumbLabel').textContent='Change image';
-    document.getElementById('thumbLink').innerHTML=`<a href="${c.thumbUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+    document.getElementById('thumbLink').innerHTML=thumbViewUrl?`<a href="${escHtml(thumbViewUrl)}" target="_blank" style="color:#3b82f6">${fileLinkLabel} →</a>`:'';
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
   if(c.vidUrl){
+    const vidViewUrl=safeUrl(demoMode?c.vidDisplayUrl:c.vidUrl);
     vidItemId=c.vidItemId||null;
     vidDisplayUrl=c.vidDisplayUrl||null;
     document.getElementById('vidStatus').textContent='File uploaded ✓';
     document.getElementById('vidLabel').textContent='Change video';
-    document.getElementById('vidLink').innerHTML=`<a href="${c.vidUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+    document.getElementById('vidLink').innerHTML=vidViewUrl?`<a href="${escHtml(vidViewUrl)}" target="_blank" style="color:#3b82f6">${fileLinkLabel} →</a>`:'';
     setPreview('vid',vidDisplayUrl,c.name);
   }
   document.getElementById('modalBg').classList.add('open');
@@ -824,10 +1335,11 @@ async function handleUpload(file,type){
       vidDisplayUrl=result.downloadUrl;
     }
     statusEl.textContent='Uploaded ✓';
-    linkEl.innerHTML=`<a href="${result.shareUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+    const resultLink=safeUrl(demoMode?result.downloadUrl:result.shareUrl);
+    linkEl.innerHTML=resultLink?`<a href="${escHtml(resultLink)}" target="_blank" style="color:#3b82f6">${demoMode?'Preview file':'View on OneDrive'} →</a>`:'';
     const curName=document.getElementById('fName').value||'';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,curName);
-    showToast('File uploaded to OneDrive','success');
+    showToast(demoMode?'File added for local preview':'File uploaded to OneDrive','success');
   }catch(e){
     statusEl.className='upload-status error';
     statusEl.textContent='Upload failed: '+e.message;
@@ -894,9 +1406,8 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
   // لو في حذف pending، احفظه فوراً قبل ما نبدأ حذف جديد
   if(pendingDelete){
     clearTimeout(pendingDelete.timer);
-    const prev=pendingDelete;pendingDelete=null;
+    pendingDelete=null;
     try{await saveData();}catch(e){}
-    _ = prev;
   }
   cards=cards.filter(c=>c.id!==editId);
   closeModal();renderAll();
@@ -938,6 +1449,17 @@ function showToastUndo(msg){
 document.getElementById('closeModalBtn').addEventListener('click',closeModal);
 document.getElementById('cancelBtn').addEventListener('click',closeModal);
 document.getElementById('openAddBtn').addEventListener('click',()=>openAdd(0));
+document.getElementById('openSettingsBtn').addEventListener('click',openSettings);
+document.getElementById('closeSettingsBtn').addEventListener('click',closeSettings);
+document.getElementById('cancelSettingsBtn').addEventListener('click',closeSettings);
+document.getElementById('addPersonBtn').addEventListener('click',addSettingsPerson);
+document.getElementById('addCategoryBtn').addEventListener('click',addSettingsCategory);
+document.getElementById('saveSettingsBtn').addEventListener('click',saveSettings);
+document.getElementById('newPersonName').addEventListener('keydown',e=>{if(e.key==='Enter')addSettingsPerson();});
+document.getElementById('newCategoryName').addEventListener('keydown',e=>{if(e.key==='Enter')addSettingsCategory();});
+document.getElementById('settingsBg').addEventListener('click',function(e){
+  if(e.target===this)closeSettings();
+});
 document.getElementById('searchInput').addEventListener('input',renderAll);
 document.getElementById('filterCat').addEventListener('change',renderAll);
 document.getElementById('filterPresenter').addEventListener('change',renderAll);
@@ -970,7 +1492,10 @@ document.getElementById('lightbox').addEventListener('click',function(e){
   if(e.target===this)closeLightbox();
 });
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape')closeLightbox();
+  if(e.key==='Escape'){
+    closeLightbox();
+    if(document.getElementById('settingsBg').classList.contains('open'))closeSettings();
+  }
 });
 
 init().catch(e=>console.error(e));
