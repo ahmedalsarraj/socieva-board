@@ -152,10 +152,16 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .modal-footer{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-top:1px solid var(--border)}
 
 /* TOAST */
-.toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--text);z-index:200;opacity:0;transform:translateY(8px);transition:all 0.2s;pointer-events:none}
-.toast.show{opacity:1;transform:translateY(0)}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--text);z-index:200;opacity:0;transform:translateY(8px);transition:all 0.2s;pointer-events:none;overflow:hidden}
+.toast.show{opacity:1;transform:translateY(0);pointer-events:auto}
 .toast.success{border-color:#2a5a2a;color:#5ae8a0}
 .toast.error{border-color:#7f1d1d;color:#f87171}
+.toast-bar{position:absolute;bottom:0;left:0;height:2px;background:currentColor;opacity:0.35;width:100%;transform-origin:left;animation:drainBar 5s linear forwards}
+@keyframes drainBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+
+/* DRAG & DROP */
+.cards.drag-over{background:rgba(59,130,246,0.05);border-radius:8px;outline:2px dashed rgba(59,130,246,0.35);outline-offset:2px}
+.card.dragging{opacity:0.3;pointer-events:none}
 
 /* LOADING */
 .loading-bar{height:2px;background:var(--blue);width:0;transition:width 0.3s;position:fixed;top:0;left:0;z-index:999}
@@ -225,7 +231,16 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <option value="Saad">Saad</option>
         <option value="Sara">Sara</option>
       </select>
+      <select class="filter" id="filterAssign">
+        <option value="">All assigned</option>
+        <option value="Ahmed">Ahmed</option>
+        <option value="Sara">Sara</option>
+        <option value="Aya">Aya</option>
+        <option value="Mostafa">Mostafa</option>
+        <option value="Saad">Saad</option>
+      </select>
       <button class="btn btn-primary" id="openAddBtn">+ New video</button>
+      <span id="syncDot" style="width:6px;height:6px;border-radius:50%;background:var(--border2);display:inline-block;flex-shrink:0;transition:background 0.4s" title="Sync status"></span>
       <div class="user-avatar" id="userAvatar" title="Sign out">?</div>
     </div>
   </div>
@@ -360,17 +375,45 @@ let cards = [];
 let editId = null;
 let thumbOneDriveUrl = null;
 let vidOneDriveUrl = null;
+let thumbItemId = null;
+let vidItemId = null;
+let thumbDisplayUrl = null;
+let vidDisplayUrl = null;
 
 const STAGES = ['Script','Recording','Under editing','Ready to post','Posted'];
 const CAT_TAG = {Education:'tag-edu',Market:'tag-mkt',Motivation:'tag-mot',Funny:'tag-fun','Top XXX':'tag-top',Branding:'tag-brd',Challenge:'tag-chl',General:'tag-gen',Story:'tag-str'};
 const AV_COLORS = {Ahmed:'#1d4ed8',Sara:'#6d28d9',Aya:'#b45309',Mostafa:'#065f46',Saad:'#7c2d12',Mustafa:'#1e3a5f'};
 const PRI_COLORS = {High:'#f87171',Medium:'#e8a83b',Low:'#5ae8a0'};
+const PRI_ORDER = {High:0,Medium:1,Low:2};
 
 function initials(n){if(!n)return'?';const p=n.trim().split(' ');return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():n.slice(0,2).toUpperCase()}
 function fmtDate(d){if(!d)return'';const p=d.split('-');const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(p[2])+' '+m[parseInt(p[1])-1]}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function escHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function safeUrl(u){if(!u)return'';const s=String(u).trim();return(s.startsWith('https://')||s.startsWith('http://'))?s:''}
+function dueDateStatus(dueDate,stage){
+  if(!dueDate||stage===4)return null;
+  const today=new Date();today.setHours(0,0,0,0);
+  const due=new Date(dueDate);due.setHours(0,0,0,0);
+  const diff=Math.round((due-today)/(864e5));
+  if(diff<0)return'overdue';
+  if(diff<=3)return'soon';
+  return null;
+}
+
+let dragCardId=null;
+let pendingDelete=null;
+
+function setSyncDot(state){
+  const d=document.getElementById('syncDot');
+  if(!d)return;
+  if(state==='syncing'){d.style.background='#e8a83b';}
+  else if(state==='ok'){d.style.background='#5ae8a0';setTimeout(()=>{d.style.background='var(--border2)';},2000);}
+  else if(state==='error'){d.style.background='#f87171';setTimeout(()=>{d.style.background='var(--border2)';},4000);}
+}
 
 function showToast(msg,type=''){
+  if(pendingDelete)return; // لا تطغى على زر Undo
   const t=document.getElementById('toast');
   t.textContent=msg;t.className='toast '+(type||'');
   t.classList.add('show');
@@ -454,7 +497,11 @@ async function uploadFile(file,subfolder){
     }
   }
   const shareRes = await apiCall(`/me/drive/items/${res.id}/createLink`,'POST',{type:'view',scope:'organization'});
-  return shareRes.link.webUrl;
+  return {
+    shareUrl: shareRes.link.webUrl,
+    itemId: res.id,
+    downloadUrl: res['@microsoft.graph.downloadUrl'] || null
+  };
 }
 
 async function init(){
@@ -467,6 +514,18 @@ async function init(){
   }
 }
 
+async function refreshDisplayUrls(){
+  const toRefresh = cards.filter(c=>c.thumbItemId||c.vidItemId);
+  await Promise.all(toRefresh.map(async c=>{
+    if(c.thumbItemId){
+      try{const m=await apiCall(`/me/drive/items/${c.thumbItemId}`);c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}catch(e){}
+    }
+    if(c.vidItemId){
+      try{const m=await apiCall(`/me/drive/items/${c.vidItemId}`);c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||c.vidDisplayUrl;}catch(e){}
+    }
+  }));
+}
+
 async function startApp(account){
   currentUser = account;
   document.getElementById('loginScreen').style.display='none';
@@ -477,9 +536,27 @@ async function startApp(account){
   await ensureFolder();
   setLoading(70);
   await loadData();
+  setLoading(85);
+  await refreshDisplayUrls();
   setLoading(100);
   setTimeout(()=>setLoading(0),500);
   renderAll();
+
+  // Polling: تحديث صامت كل دقيقتين للبيانات فقط
+  setInterval(async()=>{
+    if(!currentUser)return;
+    if(document.getElementById('modalBg').classList.contains('open'))return;
+    if(pendingDelete)return;
+    setSyncDot('syncing');
+    try{await loadData();renderAll();setSyncDot('ok');}
+    catch(e){setSyncDot('error');}
+  },2*60*1000);
+
+  // تجديد display URLs كل 50 دقيقة (قبل انتهاء الساعة)
+  setInterval(async()=>{
+    if(!currentUser)return;
+    try{await refreshDisplayUrls();renderAll();}catch(e){}
+  },50*60*1000);
 }
 
 document.getElementById('loginBtn').addEventListener('click',async()=>{
@@ -498,61 +575,86 @@ function getFiltered(){
   const q=(document.getElementById('searchInput').value||'').toLowerCase();
   const cat=document.getElementById('filterCat').value;
   const pre=document.getElementById('filterPresenter').value;
+  const asgn=document.getElementById('filterAssign').value;
   return cards.filter(c=>{
-    if(q&&!c.name.toLowerCase().includes(q))return false;
+    if(q&&![c.name,c.channel,c.segment,c.presenter,c.assign,c.editor,c.seo,c.notes].some(v=>v&&v.toLowerCase().includes(q)))return false;
     if(cat&&c.category!==cat)return false;
     if(pre&&c.presenter!==pre)return false;
+    if(asgn&&c.assign!==asgn)return false;
     return true;
   });
 }
 
 function renderStats(){
   const fc=getFiltered();
-  document.getElementById('statsBar').innerHTML=STAGES.map((s,i)=>`
-    <div class="stat">
-      <div class="stat-num">${fc.filter(c=>c.stage===i).length}</div>
-      <div class="stat-label">${s}</div>
-    </div>`).join('');
+  const isFiltering=fc.length!==cards.length;
+  document.getElementById('statsBar').innerHTML=STAGES.map((s,i)=>{
+    const fCount=fc.filter(c=>c.stage===i).length;
+    const tCount=cards.filter(c=>c.stage===i).length;
+    const num=isFiltering
+      ?`${fCount}<span style="font-size:12px;color:var(--text3);font-weight:300">/${tCount}</span>`
+      :`${fCount}`;
+    return`<div class="stat"><div class="stat-num">${num}</div><div class="stat-label">${s}</div></div>`;
+  }).join('');
 }
 
 function renderCard(c){
   const av=AV_COLORS[c.assign||c.presenter]||'#333';
-  const ini=initials(c.assign||c.presenter||'?');
+  const ini=escHtml(initials(c.assign||c.presenter||'?'));
   const catCls=CAT_TAG[c.category]||'tag-gen';
-  const thumbHtml=c.thumbUrl
-    ?`<div class="card-thumb" style="cursor:zoom-in" onclick="event.stopPropagation();openLightbox('img','${c.thumbUrl}','${c.name}')"><img src="${c.thumbUrl}" onerror="this.parentElement.innerHTML='<span class=thumb-placeholder>Thumbnail</span>'"></div>`
+  const scriptUrl=safeUrl(c.script);
+  const thumbSrc=safeUrl(c.thumbDisplayUrl);
+  const vidSrc=safeUrl(c.vidDisplayUrl);
+  const dueSt=dueDateStatus(c.dueDate,c.stage);
+  const thumbHtml=thumbSrc
+    ?`<div class="card-thumb" style="cursor:zoom-in" onclick="event.stopPropagation();openLightbox('img',${JSON.stringify(thumbSrc)},${JSON.stringify(c.name||'')})"><img src="${escHtml(thumbSrc)}" onerror="this.parentElement.innerHTML='<span class=thumb-placeholder>Thumbnail</span>'"></div>`
     :'';
-  return`<div class="card" data-id="${c.id}">
+  return`<div class="card" draggable="true" data-id="${escHtml(c.id)}">
     ${thumbHtml}
-    <div class="card-name">${c.name}</div>
+    <div class="card-name">${escHtml(c.name)}</div>
     <div class="card-tags">
-      <span class="tag ${catCls}">${c.category||'—'}</span>
-      <span class="tag ${c.format==='Long'?'tag-long':'tag-short'}">${c.format||'Short'}</span>
-      ${c.priority?`<span class="tag" style="background:#1a1a1a;color:${PRI_COLORS[c.priority]||'#888'}">${c.priority}</span>`:''}
+      <span class="tag ${catCls}">${escHtml(c.category)||'—'}</span>
+      <span class="tag ${c.format==='Long'?'tag-long':'tag-short'}">${escHtml(c.format)||'Short'}</span>
+      ${c.priority?`<span class="tag" style="background:#1a1a1a;color:${PRI_COLORS[c.priority]||'#888'}">${escHtml(c.priority)}</span>`:''}
+      ${dueSt==='overdue'?`<span class="tag" style="background:#3f1010;color:#f87171">Overdue</span>`:''}
+      ${dueSt==='soon'?`<span class="tag" style="background:#3f2a0a;color:#e8a83b">Due soon</span>`:''}
     </div>
     <div class="card-meta">
-      ${c.presenter?`<div class="meta-row"><span class="meta-k">Presenter</span><span class="meta-v">${c.presenter}</span></div>`:''}
-      ${c.channel?`<div class="meta-row"><span class="meta-k">Channel</span><span class="meta-v">${c.channel}</span></div>`:''}
-      ${c.postDate?`<div class="meta-row"><span class="meta-k">Post date</span><span class="meta-v">${fmtDate(c.postDate)}</span></div>`:''}
-      ${c.compliance?`<div class="meta-row"><span class="meta-k">Compliance</span><span class="meta-v ${c.compliance==='Approved'?'green':c.compliance==='Rejected'?'red':'amber'}">${c.compliance}</span></div>`:''}
-      ${c.script?`<div class="meta-row"><span class="meta-k">Script</span><a href="${c.script}" target="_blank" style="font-size:11px;color:#3b82f6;text-decoration:none" onclick="event.stopPropagation()">Open →</a></div>`:''}
+      ${c.presenter?`<div class="meta-row"><span class="meta-k">Presenter</span><span class="meta-v">${escHtml(c.presenter)}</span></div>`:''}
+      ${c.channel?`<div class="meta-row"><span class="meta-k">Channel</span><span class="meta-v">${escHtml(c.channel)}</span></div>`:''}
+      ${c.postDate?`<div class="meta-row"><span class="meta-k">Post date</span><span class="meta-v">${escHtml(fmtDate(c.postDate))}</span></div>`:''}
+      ${c.compliance?`<div class="meta-row"><span class="meta-k">Compliance</span><span class="meta-v ${c.compliance==='Approved'?'green':c.compliance==='Rejected'?'red':'amber'}">${escHtml(c.compliance)}</span></div>`:''}
+      ${scriptUrl?`<div class="meta-row"><span class="meta-k">Script</span><a href="${escHtml(scriptUrl)}" target="_blank" style="font-size:11px;color:#3b82f6;text-decoration:none" onclick="event.stopPropagation()">Open →</a></div>`:''}
     </div>
     <hr class="card-hr">
     <div class="card-footer">
       <div style="display:flex;align-items:center;gap:7px">
         <div class="avatar-sm" style="background:${av}">${ini}</div>
-        <span style="font-size:11px;color:var(--text3)">${c.assign||c.presenter||'—'}</span>
+        <span style="font-size:11px;color:var(--text3)">${escHtml(c.assign||c.presenter||'—')}</span>
       </div>
       <div class="file-indicators">
         <div class="file-dot ${c.thumbUrl?'has':'none'}" title="${c.thumbUrl?'Thumbnail uploaded':'No thumbnail'}"></div>
         <div class="file-dot ${c.vidUrl?'has':'none'}" title="${c.vidUrl?'Video uploaded':'No video'}"></div>
-        ${c.vidUrl?`<span style="font-size:10px;color:#3b82f6;cursor:pointer;font-weight:500" onclick="event.stopPropagation();openLightbox('vid','${c.vidUrl}','${c.name}')">▶ Preview</span>`:`<span class="file-label">files</span>`}
+        ${vidSrc?`<span style="font-size:10px;color:#3b82f6;cursor:pointer;font-weight:500" onclick="event.stopPropagation();openLightbox('vid',${JSON.stringify(vidSrc)},${JSON.stringify(c.name||'')})">▶ Preview</span>`:`<span class="file-label">files</span>`}
       </div>
     </div>
   </div>`;
 }
 
+function sortCards(arr){
+  return arr.slice().sort((a,b)=>{
+    const pa=PRI_ORDER[a.priority]??3, pb=PRI_ORDER[b.priority]??3;
+    if(pa!==pb)return pa-pb;
+    if(a.dueDate&&b.dueDate)return a.dueDate.localeCompare(b.dueDate);
+    if(a.dueDate)return -1;
+    if(b.dueDate)return 1;
+    return 0;
+  });
+}
+
 function renderAll(){
+  const bw=document.querySelector('.board-wrap');
+  const sx=bw?bw.scrollLeft:0;
   renderStats();
   const fc=getFiltered();
   document.getElementById('board').innerHTML=STAGES.map((s,i)=>`
@@ -562,13 +664,46 @@ function renderAll(){
         <span class="col-count">${fc.filter(c=>c.stage===i).length}</span>
       </div>
       <div class="cards" id="col-${i}">
-        ${fc.filter(c=>c.stage===i).map(renderCard).join('')}
+        ${sortCards(fc.filter(c=>c.stage===i)).map(renderCard).join('')}
         <button class="add-card-btn" data-stage="${i}">+ Add video</button>
       </div>
     </div>`).join('');
+  if(bw)bw.scrollLeft=sx;
 
   document.querySelectorAll('.card').forEach(el=>{
     el.addEventListener('click',()=>openEdit(el.dataset.id));
+    el.addEventListener('dragstart',e=>{
+      dragCardId=el.dataset.id;
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+    });
+    el.addEventListener('dragend',()=>{
+      el.classList.remove('dragging');
+      document.querySelectorAll('.cards').forEach(c=>c.classList.remove('drag-over'));
+    });
+  });
+  document.querySelectorAll('.cards').forEach(col=>{
+    col.addEventListener('dragover',e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      col.classList.add('drag-over');
+    });
+    col.addEventListener('dragleave',e=>{
+      if(!col.contains(e.relatedTarget))col.classList.remove('drag-over');
+    });
+    col.addEventListener('drop',async e=>{
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      if(!dragCardId)return;
+      const newStage=parseInt(col.id.replace('col-',''));
+      const card=cards.find(c=>c.id===dragCardId);
+      if(card&&card.stage!==newStage){
+        card.stage=newStage;
+        renderAll();
+        try{await saveData();}catch(err){showToast('Save failed: '+err.message,'error');}
+      }
+      dragCardId=null;
+    });
   });
   document.querySelectorAll('.add-card-btn').forEach(el=>{
     el.addEventListener('click',()=>openAdd(parseInt(el.dataset.stage)));
@@ -577,6 +712,8 @@ function renderAll(){
 
 function resetModal(){
   thumbOneDriveUrl=null;vidOneDriveUrl=null;
+  thumbItemId=null;vidItemId=null;
+  thumbDisplayUrl=null;vidDisplayUrl=null;
   ['fName','fChannel','fSegment','fScript','fSeo','fNotes','fPostDate','fDueDate'].forEach(id=>document.getElementById(id).value='');
   ['fFormat','fCategory','fPresenter','fAssign','fEditor','fPriority','fCompliance','fApprove','fStage'].forEach(id=>{
     const el=document.getElementById(id);
@@ -621,8 +758,20 @@ function openEdit(id){
   document.getElementById('fCompliance').value=c.compliance||'';
   document.getElementById('fApprove').value=c.approve||'';
   document.getElementById('fStage').value=c.stage||0;
-  if(c.thumbUrl){document.getElementById('thumbStatus').textContent='File uploaded ✓';document.getElementById('thumbLabel').textContent='Change image'}
-  if(c.vidUrl){document.getElementById('vidStatus').textContent='File uploaded ✓';document.getElementById('vidLabel').textContent='Change video'}
+  if(c.thumbUrl){
+    thumbItemId=c.thumbItemId||null;
+    thumbDisplayUrl=c.thumbDisplayUrl||null;
+    document.getElementById('thumbStatus').textContent='File uploaded ✓';
+    document.getElementById('thumbLabel').textContent='Change image';
+    document.getElementById('thumbLink').innerHTML=`<a href="${c.thumbUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+  }
+  if(c.vidUrl){
+    vidItemId=c.vidItemId||null;
+    vidDisplayUrl=c.vidDisplayUrl||null;
+    document.getElementById('vidStatus').textContent='File uploaded ✓';
+    document.getElementById('vidLabel').textContent='Change video';
+    document.getElementById('vidLink').innerHTML=`<a href="${c.vidUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+  }
   document.getElementById('modalBg').classList.add('open');
 }
 
@@ -636,11 +785,18 @@ async function handleUpload(file,type){
   statusEl.textContent='Uploading...';
   boxEl.classList.add('uploading');
   try{
-    const url = await uploadFile(file,type==='thumb'?'thumbnails':'videos');
-    if(type==='thumb')thumbOneDriveUrl=url;
-    else vidOneDriveUrl=url;
+    const result = await uploadFile(file,type==='thumb'?'thumbnails':'videos');
+    if(type==='thumb'){
+      thumbOneDriveUrl=result.shareUrl;
+      thumbItemId=result.itemId;
+      thumbDisplayUrl=result.downloadUrl;
+    }else{
+      vidOneDriveUrl=result.shareUrl;
+      vidItemId=result.itemId;
+      vidDisplayUrl=result.downloadUrl;
+    }
     statusEl.textContent='Uploaded ✓';
-    linkEl.innerHTML=`<a href="${url}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
+    linkEl.innerHTML=`<a href="${result.shareUrl}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`;
     showToast('File uploaded to OneDrive','success');
   }catch(e){
     statusEl.className='upload-status error';
@@ -680,7 +836,11 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     approve:document.getElementById('fApprove').value,
     stage:parseInt(document.getElementById('fStage').value),
     thumbUrl:thumbOneDriveUrl,
-    vidUrl:vidOneDriveUrl
+    vidUrl:vidOneDriveUrl,
+    thumbItemId:thumbItemId,
+    vidItemId:vidItemId,
+    thumbDisplayUrl:thumbDisplayUrl,
+    vidDisplayUrl:vidDisplayUrl
   };
   const btn=document.getElementById('saveBtn');
   btn.textContent='Saving...';btn.disabled=true;
@@ -697,12 +857,53 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
 });
 
 document.getElementById('deleteBtn').addEventListener('click',async()=>{
-  if(!editId||!confirm('Delete this video?'))return;
+  if(!editId)return;
+  const cardToDelete=cards.find(c=>c.id===editId);
+  if(!cardToDelete)return;
+  const originalIndex=cards.indexOf(cardToDelete);
+  // لو في حذف pending، احفظه فوراً قبل ما نبدأ حذف جديد
+  if(pendingDelete){
+    clearTimeout(pendingDelete.timer);
+    const prev=pendingDelete;pendingDelete=null;
+    try{await saveData();}catch(e){}
+    _ = prev;
+  }
   cards=cards.filter(c=>c.id!==editId);
-  await saveData();
   closeModal();renderAll();
-  showToast('Video deleted');
+  pendingDelete={
+    card:cardToDelete,
+    index:originalIndex,
+    timer:setTimeout(async()=>{
+      pendingDelete=null;
+      try{await saveData();}catch(e){showToast('Delete failed: '+e.message,'error');}
+    },5000)
+  };
+  showToastUndo('"'+cardToDelete.name+'" deleted');
 });
+
+function showToastUndo(msg){
+  const t=document.getElementById('toast');
+  t.innerHTML='';
+  const span=document.createElement('span');
+  span.textContent=msg;
+  const btn=document.createElement('button');
+  btn.textContent='Undo';
+  btn.style.cssText='margin-left:12px;background:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px;font-size:12px;color:inherit;cursor:pointer;font-family:inherit';
+  btn.addEventListener('click',()=>{
+    if(pendingDelete){
+      clearTimeout(pendingDelete.timer);
+      cards.splice(pendingDelete.index,0,pendingDelete.card);
+      pendingDelete=null;
+      renderAll();
+      t.classList.remove('show');
+    }
+  });
+  const bar=document.createElement('div');
+  bar.className='toast-bar';
+  t.appendChild(span);t.appendChild(btn);t.appendChild(bar);
+  t.className='toast show';
+  setTimeout(()=>{if(!pendingDelete)t.classList.remove('show');},5000);
+}
 
 document.getElementById('closeModalBtn').addEventListener('click',closeModal);
 document.getElementById('cancelBtn').addEventListener('click',closeModal);
@@ -710,14 +911,19 @@ document.getElementById('openAddBtn').addEventListener('click',()=>openAdd(0));
 document.getElementById('searchInput').addEventListener('input',renderAll);
 document.getElementById('filterCat').addEventListener('change',renderAll);
 document.getElementById('filterPresenter').addEventListener('change',renderAll);
+document.getElementById('filterAssign').addEventListener('change',renderAll);
+document.getElementById('modalBg').addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter')document.getElementById('saveBtn').click();
+});
 
 function openLightbox(type,url,name){
   const content=document.getElementById('lightboxContent');
   const label=document.getElementById('lightboxLabel');
+  const safeU=escHtml(safeUrl(url));
   if(type==='img'){
-    content.innerHTML=`<img class="lightbox-img" src="${url}" alt="${name}">`;
+    content.innerHTML=`<img class="lightbox-img" src="${safeU}" alt="${escHtml(name)}">`;
   }else{
-    content.innerHTML=`<video class="lightbox-video" src="${url}" controls autoplay></video>`;
+    content.innerHTML=`<video class="lightbox-video" src="${safeU}" controls autoplay></video>`;
   }
   label.textContent=name;
   document.getElementById('lightbox').classList.add('open');
