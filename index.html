@@ -43,8 +43,6 @@ body{
 .login-sub{font-size:14px;color:var(--text2);margin-bottom:2.5rem;line-height:1.6}
 .btn-login{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:500;font-family:var(--font);cursor:pointer;transition:background 0.15s}
 .btn-login:hover{background:var(--blue2)}
-.btn-demo{margin-top:10px;background:transparent;border:1px solid var(--border);color:var(--text2)}
-.btn-demo:hover{background:var(--bg3);border-color:var(--border2);color:var(--text)}
 .ms-icon{width:18px;height:18px;flex-shrink:0}
 
 /* APP */
@@ -239,7 +237,6 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       </svg>
       Sign in with Microsoft
     </button>
-    <button class="btn-login btn-demo" id="demoBtn">Preview without login</button>
   </div>
 </div>
 
@@ -436,10 +433,6 @@ const TENANT_ID = '4cd6b3cc-09bd-467e-a6ee-78d2c7926a5d';
 const SCOPES = ['Files.ReadWrite','User.Read','offline_access'];
 const FOLDER_NAME = 'Socieva-Board';
 const DATA_FILE = 'board-data.json';
-const DEMO_STORAGE_KEY = 'socieva-board-demo-data';
-const DEMO_DB_NAME = 'socieva-board-demo-files';
-const DEMO_DB_STORE = 'files';
-const DEMO_ACCOUNT = {name:'Preview User',username:'preview@socieva.local'};
 const SETTINGS_ADMIN_EMAILS = [
   'ahmed@socievastudio.com',
   'sara@socievastudio.com'
@@ -453,7 +446,6 @@ const msalConfig = {
 const msalApp = window.msal ? new msal.PublicClientApplication(msalConfig) : null;
 let accessToken = null;
 let currentUser = null;
-let demoMode = false;
 let cards = [];
 let editId = null;
 let thumbOneDriveUrl = null;
@@ -462,7 +454,6 @@ let thumbItemId = null;
 let vidItemId = null;
 let thumbDisplayUrl = null;
 let vidDisplayUrl = null;
-let demoObjectUrls = [];
 let boardSettings = null;
 let settingsDraft = null;
 
@@ -489,14 +480,12 @@ function jsArg(s){return escHtml(JSON.stringify(String(s??'')))}
 function norm(s){return String(s||'').trim().toLowerCase()}
 function pathPart(s){return encodeURIComponent(String(s))}
 function drivePath(...parts){return parts.map(pathPart).join('/')}
-function isDemoRequested(){return new URLSearchParams(window.location.search).get('demo')==='1'}
 function accountIdentifiers(account){
   if(!account)return[];
   const claims=account.idTokenClaims||{};
   return [account.username,account.name,claims.preferred_username,claims.email,claims.upn].map(norm).filter(Boolean);
 }
 function canManageSettings(){
-  if(demoMode)return true;
   const admins=SETTINGS_ADMIN_EMAILS.map(norm).filter(Boolean);
   return accountIdentifiers(currentUser).some(id=>admins.includes(id));
 }
@@ -564,88 +553,8 @@ function buildBoardPayload(){
   return {
     version:2,
     settings:normalizeSettings(getSettings()),
-    cards:demoMode?serializeDemoCards():cards
+    cards
   };
-}
-function demoSeedCards(){
-  return [
-    {id:'demo-script',name:'Gold market opening hook',format:'Short',category:'Market',presenter:'Mustafa',assign:'Ahmed',editor:'Mostafa',priority:'High',postDate:dateOffset(2),dueDate:dateOffset(1),channel:'Instagram Reels',segment:'Morning Market',script:'',seo:'#gold #trading #markets',notes:'Demo card for local preview.',compliance:'Pending',approve:'',stage:0,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
-    {id:'demo-recording',name:'How leverage works in simple Arabic',format:'Long',category:'Education',presenter:'Sara',assign:'Sara',editor:'Ahmed',priority:'Medium',postDate:dateOffset(5),dueDate:dateOffset(3),channel:'YouTube',segment:'Education',script:'',seo:'#leverage #education',notes:'Check modal fields, filters, and drag between stages.',compliance:'Approved',approve:'Ahmed',stage:1,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
-    {id:'demo-editing',name:'Trading psychology: avoid revenge trades',format:'Short',category:'Motivation',presenter:'Saad',assign:'Aya',editor:'Sara',priority:'Low',postDate:dateOffset(7),dueDate:dateOffset(4),channel:'TikTok',segment:'Mindset',script:'',seo:'#psychology #riskmanagement',notes:'Demo data is saved in this browser only.',compliance:'Pending',approve:'',stage:2,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
-    {id:'demo-ready',name:'Top 5 market terms beginners confuse',format:'Short',category:'Top XXX',presenter:'Mustafa',assign:'Mostafa',editor:'Mostafa',priority:'High',postDate:dateOffset(1),dueDate:dateOffset(0),channel:'Instagram Reels',segment:'Top 5',script:'',seo:'#tradingterms #beginners',notes:'Ready demo item.',compliance:'Approved',approve:'Sara',stage:3,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null},
-    {id:'demo-posted',name:'What moved oil this week',format:'Long',category:'Market',presenter:'Sara',assign:'Saad',editor:'Ahmed',priority:'Medium',postDate:dateOffset(-1),dueDate:dateOffset(-2),channel:'YouTube Shorts',segment:'Weekly recap',script:'',seo:'#oil #weeklyrecap',notes:'Posted demo item.',compliance:'Approved',approve:'Ahmed',stage:4,thumbUrl:null,vidUrl:null,thumbItemId:null,vidItemId:null,thumbDisplayUrl:null,vidDisplayUrl:null}
-  ];
-}
-function openDemoDb(){
-  return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(DEMO_DB_NAME,1);
-    req.onupgradeneeded=()=>{
-      const db=req.result;
-      if(!db.objectStoreNames.contains(DEMO_DB_STORE)){
-        db.createObjectStore(DEMO_DB_STORE,{keyPath:'id'});
-      }
-    };
-    req.onsuccess=()=>resolve(req.result);
-    req.onerror=()=>reject(req.error);
-  });
-}
-async function demoDbPut(record){
-  const db=await openDemoDb();
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction(DEMO_DB_STORE,'readwrite');
-    tx.objectStore(DEMO_DB_STORE).put(record);
-    tx.oncomplete=()=>{db.close();resolve();};
-    tx.onerror=()=>{db.close();reject(tx.error);};
-  });
-}
-async function demoDbGet(id){
-  const db=await openDemoDb();
-  return new Promise((resolve,reject)=>{
-    const tx=db.transaction(DEMO_DB_STORE,'readonly');
-    const req=tx.objectStore(DEMO_DB_STORE).get(id);
-    req.onsuccess=()=>resolve(req.result||null);
-    req.onerror=()=>reject(req.error);
-    tx.oncomplete=()=>db.close();
-  });
-}
-function rememberDemoObjectUrl(url){
-  demoObjectUrls.push(url);
-  return url;
-}
-function serializeDemoCards(){
-  return cards.map(c=>({
-    ...c,
-    thumbDisplayUrl:null,
-    vidDisplayUrl:null
-  }));
-}
-async function hydrateDemoFiles(){
-  demoObjectUrls.forEach(url=>URL.revokeObjectURL(url));
-  demoObjectUrls=[];
-  await Promise.all(cards.map(async c=>{
-    if(c.thumbItemId){
-      const record=await demoDbGet(c.thumbItemId);
-      if(record&&record.blob){
-        c.thumbUrl=`demo-file:${c.thumbItemId}`;
-        c.thumbDisplayUrl=rememberDemoObjectUrl(URL.createObjectURL(record.blob));
-      }else{
-        c.thumbUrl=null;c.thumbItemId=null;c.thumbDisplayUrl=null;
-      }
-    }else if(String(c.thumbUrl||'').startsWith('blob:')){
-      c.thumbUrl=null;c.thumbDisplayUrl=null;
-    }
-    if(c.vidItemId){
-      const record=await demoDbGet(c.vidItemId);
-      if(record&&record.blob){
-        c.vidUrl=`demo-file:${c.vidItemId}`;
-        c.vidDisplayUrl=rememberDemoObjectUrl(URL.createObjectURL(record.blob));
-      }else{
-        c.vidUrl=null;c.vidItemId=null;c.vidDisplayUrl=null;
-      }
-    }else if(String(c.vidUrl||'').startsWith('blob:')){
-      c.vidUrl=null;c.vidDisplayUrl=null;
-    }
-  }));
 }
 function dueDateStatus(dueDate,stage){
   if(!dueDate||stage===4)return null;
@@ -737,20 +646,6 @@ async function ensureSubfolder(name){
 }
 
 async function loadData(){
-  if(demoMode){
-    try{
-      const raw = localStorage.getItem(DEMO_STORAGE_KEY);
-      if(raw)parseBoardData(JSON.parse(raw));
-      else{cards = demoSeedCards();boardSettings=defaultSettings();}
-      if(!raw)localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify(buildBoardPayload(),null,2));
-      await hydrateDemoFiles();
-      localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify(buildBoardPayload(),null,2));
-    }catch(e){
-      cards = demoSeedCards();
-      boardSettings=defaultSettings();
-    }
-    return;
-  }
   try{
     const meta = await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}`);
     const blob = await apiCall(`/me/drive/items/${meta.id}/content`,undefined,null,true);
@@ -764,26 +659,12 @@ async function loadData(){
 }
 
 async function saveData(){
-  if(demoMode){
-    localStorage.setItem(DEMO_STORAGE_KEY,JSON.stringify(buildBoardPayload(),null,2));
-    return;
-  }
   const json = JSON.stringify(buildBoardPayload(),null,2);
   const blob = new Blob([json],{type:'application/json'});
   await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}:/content`,'PUT',blob);
 }
 
 async function uploadFile(file,subfolder){
-  if(demoMode){
-    const itemId='demo-'+uid();
-    await demoDbPut({id:itemId,name:file.name,type:file.type,blob:file,updatedAt:Date.now(),subfolder});
-    const url = rememberDemoObjectUrl(URL.createObjectURL(file));
-    return {
-      shareUrl:`demo-file:${itemId}`,
-      itemId,
-      downloadUrl:url
-    };
-  }
   await ensureSubfolder(subfolder);
   const path = drivePath(FOLDER_NAME,subfolder,file.name);
   let res;
@@ -813,12 +694,8 @@ async function uploadFile(file,subfolder){
 }
 
 async function init(){
-  if(isDemoRequested()){
-    await startApp(DEMO_ACCOUNT,{demo:true});
-    return;
-  }
   if(!msalApp){
-    showToast('Microsoft login is unavailable. Use preview mode.','error');
+    showToast('Microsoft login is unavailable.','error');
     return;
   }
   await msalApp.initialize();
@@ -835,7 +712,6 @@ function encodeSharingUrl(url){
 }
 
 async function refreshDisplayUrls(){
-  if(demoMode)return;
   await Promise.all(cards.map(async c=>{
     if(c.thumbItemId){
       try{const m=await apiCall(`/me/drive/items/${c.thumbItemId}`);c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}catch(e){}
@@ -850,48 +726,41 @@ async function refreshDisplayUrls(){
   }));
 }
 
-async function startApp(account,opts={}){
-  demoMode = !!opts.demo;
+async function startApp(account){
   currentUser = account;
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('userAvatar').textContent=initials(account.name||account.username);
-  document.getElementById('userAvatar').title=demoMode?'Exit preview':(account.name||account.username)+' — click to sign out';
-  document.querySelector('.board-label').textContent=demoMode?'Capital.com Arabic · Local preview':'Capital.com Arabic';
-  document.getElementById('filesSectionTitle').textContent=demoMode?'Files (local preview only)':'Files (uploaded to OneDrive)';
+  document.getElementById('userAvatar').title=(account.name||account.username)+' — click to sign out';
+  document.querySelector('.board-label').textContent='Capital.com Arabic';
+  document.getElementById('filesSectionTitle').textContent='Files (uploaded to OneDrive)';
   setLoading(30);
-  if(demoMode){
-    await loadData();
-  }else{
-    await ensureFolder();
-    setLoading(70);
-    await loadData();
-    setLoading(85);
-    await refreshDisplayUrls();
-  }
+  await ensureFolder();
+  setLoading(70);
+  await loadData();
+  setLoading(85);
+  await refreshDisplayUrls();
   setLoading(100);
   setTimeout(()=>setLoading(0),500);
   refreshOptionLists();
   updateSettingsAccess();
   renderAll();
 
-  if(!demoMode){
-    // Polling: تحديث صامت كل دقيقتين للبيانات فقط
-    setInterval(async()=>{
-      if(!currentUser)return;
-      if(document.getElementById('modalBg').classList.contains('open'))return;
-      if(pendingDelete)return;
-      setSyncDot('syncing');
-      try{await loadData();refreshOptionLists();renderAll();setSyncDot('ok');}
-      catch(e){setSyncDot('error');}
-    },2*60*1000);
+  // Polling: تحديث صامت كل دقيقتين للبيانات فقط
+  setInterval(async()=>{
+    if(!currentUser)return;
+    if(document.getElementById('modalBg').classList.contains('open'))return;
+    if(pendingDelete)return;
+    setSyncDot('syncing');
+    try{await loadData();refreshOptionLists();renderAll();setSyncDot('ok');}
+    catch(e){setSyncDot('error');}
+  },2*60*1000);
 
-    // تجديد display URLs كل 50 دقيقة (قبل انتهاء الساعة)
-    setInterval(async()=>{
-      if(!currentUser)return;
-      try{await refreshDisplayUrls();renderAll();}catch(e){}
-    },50*60*1000);
-  }
+  // تجديد display URLs كل 50 دقيقة (قبل انتهاء الساعة)
+  setInterval(async()=>{
+    if(!currentUser)return;
+    try{await refreshDisplayUrls();renderAll();}catch(e){}
+  },50*60*1000);
 }
 
 document.getElementById('loginBtn').addEventListener('click',async()=>{
@@ -902,19 +771,7 @@ document.getElementById('loginBtn').addEventListener('click',async()=>{
   }catch(e){showToast('Login failed: '+e.message,'error')}
 });
 
-document.getElementById('demoBtn').addEventListener('click',()=>{
-  const url = new URL(window.location.href);
-  url.searchParams.set('demo','1');
-  window.location.href = url.toString();
-});
-
 document.getElementById('userAvatar').addEventListener('click',()=>{
-  if(demoMode){
-    const url = new URL(window.location.href);
-    url.searchParams.delete('demo');
-    window.location.href = url.toString();
-    return;
-  }
   if(msalApp)msalApp.logoutPopup();
   location.reload();
 });
@@ -1292,23 +1149,22 @@ function openEdit(id){
   document.getElementById('fCompliance').value=c.compliance||'';
   document.getElementById('fApprove').value=c.approve||'';
   document.getElementById('fStage').value=c.stage||0;
-  const fileLinkLabel=demoMode?'Preview file':'View on OneDrive';
   if(c.thumbUrl){
-    const thumbViewUrl=safeUrl(demoMode?c.thumbDisplayUrl:c.thumbUrl);
+    const thumbViewUrl=safeUrl(c.thumbUrl);
     thumbItemId=c.thumbItemId||null;
     thumbDisplayUrl=c.thumbDisplayUrl||null;
     document.getElementById('thumbStatus').textContent='File uploaded ✓';
     document.getElementById('thumbLabel').textContent='Change image';
-    document.getElementById('thumbLink').innerHTML=thumbViewUrl?`<a href="${escHtml(thumbViewUrl)}" target="_blank" style="color:#3b82f6">${fileLinkLabel} →</a>`:'';
+    document.getElementById('thumbLink').innerHTML=thumbViewUrl?`<a href="${escHtml(thumbViewUrl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
   if(c.vidUrl){
-    const vidViewUrl=safeUrl(demoMode?c.vidDisplayUrl:c.vidUrl);
+    const vidViewUrl=safeUrl(c.vidUrl);
     vidItemId=c.vidItemId||null;
     vidDisplayUrl=c.vidDisplayUrl||null;
     document.getElementById('vidStatus').textContent='File uploaded ✓';
     document.getElementById('vidLabel').textContent='Change video';
-    document.getElementById('vidLink').innerHTML=vidViewUrl?`<a href="${escHtml(vidViewUrl)}" target="_blank" style="color:#3b82f6">${fileLinkLabel} →</a>`:'';
+    document.getElementById('vidLink').innerHTML=vidViewUrl?`<a href="${escHtml(vidViewUrl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
     setPreview('vid',vidDisplayUrl,c.name);
   }
   document.getElementById('modalBg').classList.add('open');
@@ -1335,11 +1191,11 @@ async function handleUpload(file,type){
       vidDisplayUrl=result.downloadUrl;
     }
     statusEl.textContent='Uploaded ✓';
-    const resultLink=safeUrl(demoMode?result.downloadUrl:result.shareUrl);
-    linkEl.innerHTML=resultLink?`<a href="${escHtml(resultLink)}" target="_blank" style="color:#3b82f6">${demoMode?'Preview file':'View on OneDrive'} →</a>`:'';
+    const resultLink=safeUrl(result.shareUrl);
+    linkEl.innerHTML=resultLink?`<a href="${escHtml(resultLink)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
     const curName=document.getElementById('fName').value||'';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,curName);
-    showToast(demoMode?'File added for local preview':'File uploaded to OneDrive','success');
+    showToast('File uploaded to OneDrive','success');
   }catch(e){
     statusEl.className='upload-status error';
     statusEl.textContent='Upload failed: '+e.message;
