@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Socieva — Content Board</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233b82f6'/%3E%3Cpath d='M18 21c0-4 3.3-7 8.8-7h19.4v8.1H27.4c-1.4 0-2.2.6-2.2 1.7 0 1 .8 1.5 2.5 1.9l10.9 2.4c5.6 1.2 8.4 4.5 8.4 9.6 0 5.8-4.5 10.3-12.1 10.3H18.6v-8.2h16.1c2 0 3-.7 3-2 0-1.1-.8-1.8-2.7-2.2l-10.6-2.3C20.1 32.4 18 29.2 18 25.1V21z' fill='white'/%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -430,9 +431,10 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 <script>
 const CLIENT_ID = 'd16994f5-e9f0-49d6-8ee6-3e1c3ad57bf0';
 const TENANT_ID = '4cd6b3cc-09bd-467e-a6ee-78d2c7926a5d';
-const SCOPES = ['Files.ReadWrite','User.Read','offline_access'];
+const SCOPES = ['Files.ReadWrite.All','User.Read','offline_access'];
 const FOLDER_NAME = 'Socieva-Board';
 const DATA_FILE = 'board-data.json';
+const SHARED_BOARD_FOLDER_URL = 'https://socievastudio-my.sharepoint.com/:f:/g/personal/itadmin_socievastudio_onmicrosoft_com/IgDUrDgaFrsPSbiRtH0EMGuhAXiI5eYbLKQLvnZhgUuFPlg?e=W3B70k';
 const SETTINGS_ADMIN_EMAILS = [
   'ahmed@socievastudio.com',
   'sara@socievastudio.com'
@@ -456,6 +458,8 @@ let thumbDisplayUrl = null;
 let vidDisplayUrl = null;
 let boardSettings = null;
 let settingsDraft = null;
+let boardDriveId = null;
+let boardRootItemId = null;
 
 const STAGES = ['Script','Recording','Under editing','Ready to post','Posted'];
 const DEFAULT_CATEGORIES = ['Education','Market','Motivation','Challenge','Funny','Branding','Story','Top XXX','General'];
@@ -480,6 +484,8 @@ function jsArg(s){return escHtml(JSON.stringify(String(s??'')))}
 function norm(s){return String(s||'').trim().toLowerCase()}
 function pathPart(s){return encodeURIComponent(String(s))}
 function drivePath(...parts){return parts.map(pathPart).join('/')}
+function sharedBoardFolderUrl(){return String(SHARED_BOARD_FOLDER_URL||'').trim()}
+function hasSharedBoardFolder(){return !!safeUrl(sharedBoardFolderUrl())}
 function accountIdentifiers(account){
   if(!account)return[];
   const claims=account.idTokenClaims||{};
@@ -556,6 +562,51 @@ function buildBoardPayload(){
     cards
   };
 }
+async function getBoardRoot(){
+  if(!hasSharedBoardFolder())return null;
+  if(boardDriveId&&boardRootItemId)return {driveId:boardDriveId,itemId:boardRootItemId};
+  const shared = await apiCall(`/shares/${encodeSharingUrl(sharedBoardFolderUrl())}/driveItem`);
+  const item = shared.remoteItem || shared;
+  const driveId = item.parentReference?.driveId || shared.parentReference?.driveId;
+  const itemId = item.id || shared.id;
+  if(!driveId||!itemId)throw new Error('Shared board folder link could not be resolved.');
+  boardDriveId=driveId;
+  boardRootItemId=itemId;
+  return {driveId,itemId};
+}
+async function boardPath(...parts){
+  const root=await getBoardRoot();
+  if(root)return `/drives/${root.driveId}/items/${root.itemId}:/${drivePath(...parts)}`;
+  return `/me/drive/root:/${drivePath(FOLDER_NAME,...parts)}`;
+}
+async function boardChildrenPath(){
+  const root=await getBoardRoot();
+  if(root)return `/drives/${root.driveId}/items/${root.itemId}/children`;
+  return `/me/drive/root:/${drivePath(FOLDER_NAME)}:/children`;
+}
+async function boardItemPath(itemId){
+  const root=await getBoardRoot();
+  if(root)return `/drives/${root.driveId}/items/${itemId}`;
+  return `/me/drive/items/${itemId}`;
+}
+async function boardItemContentPath(itemId){
+  return `${await boardItemPath(itemId)}/content`;
+}
+async function boardCreateLinkPath(itemId){
+  return `${await boardItemPath(itemId)}/createLink`;
+}
+async function loadLegacyPersonalData(){
+  try{
+    const meta = await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}`);
+    const blob = await apiCall(`/me/drive/items/${meta.id}/content`,undefined,null,true);
+    const text = await blob.text();
+    parseBoardData(JSON.parse(text));
+    return true;
+  }catch(e){
+    if(e.status!==404)throw e;
+    return false;
+  }
+}
 function dueDateStatus(dueDate,stage){
   if(!dueDate||stage===4)return null;
   const today=new Date();today.setHours(0,0,0,0);
@@ -623,6 +674,10 @@ async function apiCall(url,method='GET',body=null,isBlob=false){
 }
 
 async function ensureFolder(){
+  if(hasSharedBoardFolder()){
+    await getBoardRoot();
+    return;
+  }
   try{
     await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME)}`);
   }catch(e){
@@ -634,11 +689,11 @@ async function ensureFolder(){
 async function ensureSubfolder(name){
   await ensureFolder();
   try{
-    await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,name)}`);
+    await apiCall(await boardPath(name));
   }catch(e){
     if(e.status!==404)throw e;
     try{
-      await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME)}:/children`,'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});
+      await apiCall(await boardChildrenPath(),'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});
     }catch(createErr){
       if(createErr.status!==409)throw createErr;
     }
@@ -647,31 +702,35 @@ async function ensureSubfolder(name){
 
 async function loadData(){
   try{
-    const meta = await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}`);
-    const blob = await apiCall(`/me/drive/items/${meta.id}/content`,undefined,null,true);
+    const meta = await apiCall(await boardPath(DATA_FILE));
+    const blob = await apiCall(await boardItemContentPath(meta.id),undefined,null,true);
     const text = await blob.text();
     parseBoardData(JSON.parse(text));
   }catch(e){
     if(e.status!==404)throw e;
-    cards = [];
-    boardSettings=defaultSettings();
+    if(hasSharedBoardFolder() && await loadLegacyPersonalData()){
+      await saveData();
+      showToast('Existing board data moved to the shared folder','success');
+    }else{
+      cards = [];
+      boardSettings=defaultSettings();
+    }
   }
 }
 
 async function saveData(){
   const json = JSON.stringify(buildBoardPayload(),null,2);
   const blob = new Blob([json],{type:'application/json'});
-  await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}:/content`,'PUT',blob);
+  await apiCall(`${await boardPath(DATA_FILE)}:/content`,'PUT',blob);
 }
 
 async function uploadFile(file,subfolder){
   await ensureSubfolder(subfolder);
-  const path = drivePath(FOLDER_NAME,subfolder,file.name);
   let res;
   if(file.size < 4*1024*1024){
-    res = await apiCall(`/me/drive/root:/${path}:/content`,'PUT',file);
+    res = await apiCall(`${await boardPath(subfolder,file.name)}:/content`,'PUT',file);
   }else{
-    const session = await apiCall(`/me/drive/root:/${path}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
+    const session = await apiCall(`${await boardPath(subfolder,file.name)}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
     const chunkSize = 320*1024*10;
     let start=0;
     while(start<file.size){
@@ -685,7 +744,7 @@ async function uploadFile(file,subfolder){
     }
   }
   if(!res||!res.id)throw new Error('Upload finished without a OneDrive item id');
-  const shareRes = await apiCall(`/me/drive/items/${res.id}/createLink`,'POST',{type:'view',scope:'organization'});
+  const shareRes = await apiCall(await boardCreateLinkPath(res.id),'POST',{type:'view',scope:'organization'});
   return {
     shareUrl: shareRes.link.webUrl,
     itemId: res.id,
@@ -714,14 +773,24 @@ function encodeSharingUrl(url){
 async function refreshDisplayUrls(){
   await Promise.all(cards.map(async c=>{
     if(c.thumbItemId){
-      try{const m=await apiCall(`/me/drive/items/${c.thumbItemId}`);c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}catch(e){}
+      try{const m=await apiCall(await boardItemPath(c.thumbItemId));c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}
+      catch(e){
+        if(c.thumbUrl){
+          try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.remoteItem?.id||m.id;c.thumbDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(inner){}
+        }
+      }
     }else if(c.thumbUrl&&!c.thumbDisplayUrl){
-      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.id;c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||null;}catch(e){}
+      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.remoteItem?.id||m.id;c.thumbDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(e){}
     }
     if(c.vidItemId){
-      try{const m=await apiCall(`/me/drive/items/${c.vidItemId}`);c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||c.vidDisplayUrl;}catch(e){}
+      try{const m=await apiCall(await boardItemPath(c.vidItemId));c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||c.vidDisplayUrl;}
+      catch(e){
+        if(c.vidUrl){
+          try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.remoteItem?.id||m.id;c.vidDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(inner){}
+        }
+      }
     }else if(c.vidUrl&&!c.vidDisplayUrl){
-      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.id;c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||null;}catch(e){}
+      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.remoteItem?.id||m.id;c.vidDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(e){}
     }
   }));
 }
