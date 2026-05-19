@@ -1921,9 +1921,13 @@ function getReportRange() {
 
 function filterCardsByPeriod(from, to) {
   if (!from && !to) return cards;
-  // A card is relevant to a period if its postDate OR dueDate falls within it
-  const inRange = d => !!d && (!from || d >= from) && (!to || d <= to);
-  return cards.filter(c => inRange(c.postDate) || inRange(c.dueDate));
+  return cards.filter(c => {
+    const created = c.createdAt ? c.createdAt.slice(0,10) : '';
+    if (!created) return false;
+    if (from && created < from) return false;
+    if (to   && created > to)   return false;
+    return true;
+  });
 }
 
 function barColor(label) {
