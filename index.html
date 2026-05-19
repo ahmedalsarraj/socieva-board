@@ -943,9 +943,8 @@ async function getToken(){
   const now=Date.now();
   if(cachedToken&&now<tokenExpiresAt-60000)return cachedToken;
   const res=await fetch(TOKEN_WORKER_URL,{method:'POST'});
-  if(!res.ok)throw new Error('Token worker error: '+res.status);
-  const data=await res.json();
-  if(data.error)throw new Error(data.description||data.error);
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok||data.error)throw new Error(data.description||data.error||'Token worker error: '+res.status);
   cachedToken=data.access_token;
   tokenExpiresAt=now+(data.expires_in*1000);
   return cachedToken;
@@ -1186,8 +1185,8 @@ async function uploadFile(file,subfolder){
     }
   }
   if(!res||!res.id)throw new Error('Upload finished without an item id');
-  const shareRes=await apiCall(await boardCreateLinkPath(res.id),'POST',{type:'view',scope:'organization'});
-  return{shareUrl:shareRes.link.webUrl,itemId:res.id,downloadUrl:res['@microsoft.graph.downloadUrl']||null};
+  // Use webUrl directly — createLink with scope:'organization' requires delegated token
+  return{shareUrl:res.webUrl||null,itemId:res.id,downloadUrl:res['@microsoft.graph.downloadUrl']||null};
 }
 
 async function refreshDisplayUrls(){
