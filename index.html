@@ -977,12 +977,10 @@ async function ensureFolder(){
 async function ensureSubfolder(name){
   if(LOCAL_MODE)return;
   await ensureFolder();
-  try{await apiCall(await boardPath(name));}
-  catch(e){
-    if(e.status!==404)throw e;
-    try{await apiCall(await boardChildrenPath(),'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});}
-    catch(createErr){if(createErr.status!==409)throw createErr;}
-  }
+  // Skip GET check — 'thumbnails' conflicts with Graph API built-in thumbnail endpoint
+  // Just attempt creation; ignore 409 (already exists)
+  try{await apiCall(await boardChildrenPath(),'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});}
+  catch(e){if(e.status!==409)throw e;}
 }
 
 // ========== INIT ==========
