@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Socieva — Content Board</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233b82f6'/%3E%3Cpath d='M18 21c0-4 3.3-7 8.8-7h19.4v8.1H27.4c-1.4 0-2.2.6-2.2 1.7 0 1 .8 1.5 2.5 1.9l10.9 2.4c5.6 1.2 8.4 4.5 8.4 9.6 0 5.8-4.5 10.3-12.1 10.3H18.6v-8.2h16.1c2 0 3-.7 3-2 0-1.1-.8-1.8-2.7-2.2l-10.6-2.3C20.1 32.4 18 29.2 18 25.1V21z' fill='white'/%3E%3C/svg%3E">
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.10.0/lib/msal-browser.min.js"></script>
+<!-- MSAL removed: token via Cloudflare Worker (ROPC) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -330,7 +330,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
   <div class="login-card">
     <div class="login-logo">Socieva Studio</div>
     <div class="login-title">Service Setup</div>
-    <div class="login-sub">Connect the OneDrive service account to enable shared storage. This is a one-time setup per device.</div>
+    <div class="login-sub">Unable to reach the storage service. Please check your connection and try again.</div>
     <button class="btn-auth" id="msConnectBtn">
       <svg class="ms-icon" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
@@ -696,12 +696,10 @@ const DEFAULT_PASSWORD = '12AS223@';
 const SESSION_KEY = 'sb_session_v2';
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 
-// ========== MSAL ==========
-const msalConfig = {
-  auth:{clientId:CLIENT_ID,authority:`https://login.microsoftonline.com/${TENANT_ID}`,redirectUri:window.location.origin+window.location.pathname},
-  cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
-};
-const msalApp = window.msal ? new msal.PublicClientApplication(msalConfig) : null;
+// ========== TOKEN WORKER ==========
+const TOKEN_WORKER_URL = 'https://socieva-onedrive-token.ahmedalsarrajm.workers.dev';
+let cachedToken = null;
+let tokenExpiresAt = 0;
 
 // ========== STATE ==========
 let currentSession = null;
@@ -942,16 +940,15 @@ async function boardCreateLinkPath(itemId){return`${await boardItemPath(itemId)}
 function encodeSharingUrl(url){return'u!'+btoa(url).replace(/=/g,'').replace(/\//g,'_').replace(/\+/g,'-')}
 
 async function getToken(){
-  if(!msalApp)throw new Error('Microsoft auth library not loaded');
-  const accounts=msalApp.getAllAccounts();
-  if(!accounts.length)throw new Error('No service account connected');
-  try{
-    const res=await msalApp.acquireTokenSilent({scopes:SCOPES,account:accounts[0]});
-    return res.accessToken;
-  }catch(e){
-    const res=await msalApp.acquireTokenPopup({scopes:SCOPES});
-    return res.accessToken;
-  }
+  const now=Date.now();
+  if(cachedToken&&now<tokenExpiresAt-60000)return cachedToken;
+  const res=await fetch(TOKEN_WORKER_URL,{method:'POST'});
+  if(!res.ok)throw new Error('Token worker error: '+res.status);
+  const data=await res.json();
+  if(data.error)throw new Error(data.description||data.error);
+  cachedToken=data.access_token;
+  tokenExpiresAt=now+(data.expires_in*1000);
+  return cachedToken;
 }
 
 async function apiCall(url,method='GET',body=null,isBlob=false){
@@ -1008,16 +1005,9 @@ async function init(){
     return;
   }
 
-  if(!msalApp){showToast('Microsoft library unavailable','error');showScreen('msConnectScreen');return;}
-  await msalApp.initialize();
-  await msalApp.handleRedirectPromise();
-  const urlParams=new URLSearchParams(window.location.search);
-  if(urlParams.get('msconnect')==='1'){showScreen('msConnectScreen');return;}
-  const accounts=msalApp.getAllAccounts();
-  if(!accounts.length){showScreen('msConnectScreen');return;}
   setLoading(20);
   try{await getToken();}
-  catch(e){showScreen('msConnectScreen');setLoading(0);return;}
+  catch(e){showToast('OneDrive connection failed: '+e.message,'error');showScreen('msConnectScreen');setLoading(0);return;}
   setLoading(40);
   try{
     await ensureFolder();
@@ -2060,12 +2050,18 @@ document.getElementById('changePwSubmitBtn').addEventListener('click', doChangeP
 document.getElementById('changePwConfirm').addEventListener('keydown', e=>{ if(e.key==='Enter') doChangePassword(); });
 
 document.getElementById('msConnectBtn').addEventListener('click', async()=>{
-  if(!msalApp){document.getElementById('msConnectError').textContent='MSAL not available';return;}
   document.getElementById('msConnectError').textContent='';
+  document.getElementById('msConnectBtn').disabled=true;
+  document.getElementById('msConnectBtn').textContent='Connecting...';
   try{
-    await msalApp.loginPopup({scopes:SCOPES});
+    cachedToken=null; tokenExpiresAt=0;
+    await getToken();
     location.reload();
-  }catch(e){document.getElementById('msConnectError').textContent='Connection failed: '+e.message;}
+  }catch(e){
+    document.getElementById('msConnectError').textContent='Connection failed: '+e.message;
+    document.getElementById('msConnectBtn').disabled=false;
+    document.getElementById('msConnectBtn').innerHTML='<svg class="ms-icon" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>Connect Service Account';
+  }
 });
 
 
