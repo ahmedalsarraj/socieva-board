@@ -1922,9 +1922,11 @@ function getReportRange() {
 function filterCardsByPeriod(from, to) {
   if (!from && !to) return cards;
   return cards.filter(c => {
-    if (!c.postDate) return false;
-    if (from && c.postDate < from) return false;
-    if (to && c.postDate > to) return false;
+    // Use postDate first; fall back to dueDate so cards without a postDate still appear
+    const d = c.postDate || c.dueDate;
+    if (!d) return false;
+    if (from && d < from) return false;
+    if (to   && d > to)   return false;
     return true;
   });
 }
@@ -1988,7 +1990,11 @@ function renderReport() {
   const tot = r.total || 1;
 
   document.getElementById('reportsBody').innerHTML = `
-    <div class="report-period-note">Period: <strong style="color:var(--text)">${escHtml(periodLabel)}</strong> &nbsp;·&nbsp; ${r.total} video${r.total!==1?'s':''} in scope</div>
+    <div class="report-period-note">
+      <span style="color:var(--text2);font-weight:500">${boardMode==='carousels'?'Carousels':'Videos'}</span>
+      &nbsp;·&nbsp; Period: <strong style="color:var(--text)">${escHtml(periodLabel)}</strong>
+      &nbsp;·&nbsp; ${r.total} ${boardMode==='carousels'?'carousel':'video'}${r.total!==1?'s':''} in scope
+    </div>
 
     <div class="report-section-title">Overview</div>
     <div class="report-summary-grid">
