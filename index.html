@@ -36,15 +36,21 @@ body{
   font-size:14px;
 }
 
-/* LOGIN */
-#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:2rem}
+/* AUTH SCREENS */
+.auth-screen{display:none;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:2rem}
 .login-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:3rem;text-align:center;max-width:400px;width:90%;backdrop-filter:blur(18px);box-shadow:0 24px 80px rgba(0,0,0,0.24)}
 .login-logo{font-size:13px;font-weight:500;color:var(--text2);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:2rem}
 .login-title{font-size:28px;font-weight:300;color:var(--text);margin-bottom:0.5rem;letter-spacing:-0.02em}
 .login-sub{font-size:14px;color:var(--text2);margin-bottom:2.5rem;line-height:1.6}
-.btn-login{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:500;font-family:var(--font);cursor:pointer;transition:background 0.15s}
-.btn-login:hover{background:var(--blue2)}
+.auth-input{width:100%;padding:12px 14px;background:rgba(7,20,48,0.50);border:1px solid var(--border);border-radius:10px;font-size:14px;color:var(--text);font-family:var(--font);outline:none;transition:border-color 0.15s;margin-bottom:10px;display:block}
+.auth-input:focus{border-color:var(--border2)}
+.auth-input::placeholder{color:var(--text3)}
+.auth-error{font-size:12px;color:#f87171;text-align:center;min-height:18px;margin-bottom:10px}
+.btn-auth{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:500;font-family:var(--font);cursor:pointer;transition:background 0.15s}
+.btn-auth:hover{background:var(--blue2)}
+.btn-auth:disabled{opacity:0.6;cursor:not-allowed}
 .ms-icon{width:18px;height:18px;flex-shrink:0}
+.auth-label{text-align:left;font-size:11px;color:var(--text3);font-weight:500;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:5px;display:block}
 
 /* APP */
 #app{display:none;min-height:100vh}
@@ -127,21 +133,100 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .card-media-empty{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:0.05em}
 .card-media-empty svg{width:24px;height:24px;opacity:0.45}
 .card-media-caption{position:absolute;left:6px;right:6px;bottom:6px;padding:3px 5px;border-radius:4px;background:rgba(0,0,0,0.55);color:#f0f0f0;font-size:9px;text-align:center;text-transform:uppercase;letter-spacing:0.04em}
-.card-thumb{width:100%;aspect-ratio:16/9;border-radius:8px;overflow:hidden;background:var(--bg3);border:1px solid var(--border);margin-bottom:10px}
-.card-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.thumb-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3)}
 .card-hr{border:none;border-top:1px solid var(--border);margin:8px 0}
 .card-footer{display:flex;align-items:center;justify-content:space-between}
 .avatar-sm{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:#fff;flex-shrink:0}
-.file-indicators{display:flex;align-items:center;gap:6px;min-height:18px}
-.file-dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--border2);background:transparent;flex-shrink:0}
-.file-dot.has{background:#5ae8a0;border-color:#5ae8a0}
-.file-dot.none{background:var(--bg4)}
-.file-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em}
 .show-more-btn{width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);font-size:12px;color:var(--text2);cursor:pointer;font-family:var(--font);transition:all 0.15s}
 .show-more-btn:hover{border-color:var(--border2);background:var(--bg3);color:var(--text)}
 .add-card-btn{width:100%;padding:9px;border-radius:8px;border:1px dashed var(--border);background:transparent;font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--font);margin-top:4px;transition:all 0.15s}
 .add-card-btn:hover{border-color:var(--border2);color:var(--text2)}
+
+/* FILTER PANEL */
+.filter-toggle-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);font-size:13px;color:var(--text2);font-family:var(--font);cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:6px}
+.filter-toggle-btn:hover,.filter-toggle-btn.active{border-color:var(--border2);background:var(--bg4);color:var(--text)}
+.filter-toggle-btn.has-filters{border-color:var(--blue);color:var(--blue)}
+.filter-count{background:var(--blue);color:#fff;font-size:10px;font-weight:600;border-radius:999px;padding:1px 6px;min-width:18px;text-align:center}
+.sort-wrap{display:flex;align-items:center;gap:4px}
+.sort-dir-btn{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);font-size:14px;color:var(--text2);cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center}
+.sort-dir-btn:hover{border-color:var(--border2);background:var(--bg4)}
+.filter-panel{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 24px;display:none;flex-direction:column;gap:12px;backdrop-filter:blur(18px)}
+.filter-panel.open{display:flex}
+.fp-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fp-label{font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;min-width:50px}
+.fp-pill-group{display:flex;gap:4px;flex-wrap:wrap}
+.fp-pill{padding:4px 11px;border-radius:999px;border:1px solid var(--border);background:transparent;font-size:12px;color:var(--text2);font-family:var(--font);cursor:pointer;transition:all 0.12s;white-space:nowrap}
+.fp-pill:hover{border-color:var(--border2);color:var(--text)}
+.fp-pill.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.fp-select{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 28px 5px 10px;font-size:12px;color:var(--text2);font-family:var(--font);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.fp-select.active{border-color:var(--blue);color:var(--text)}
+.fp-input{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;width:140px;transition:border-color 0.15s}
+.fp-input:focus{border-color:var(--border2)}
+.fp-input::placeholder{color:var(--text3)}
+.fp-input.active{border-color:var(--blue)}
+.fp-date{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-size:12px;color:var(--text);font-family:var(--font);outline:none;width:130px}
+.fp-date:focus{border-color:var(--border2)}
+.fp-date.active{border-color:var(--blue)}
+.fp-check-label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;user-select:none;padding:4px 10px;border-radius:999px;border:1px solid var(--border);transition:all 0.12s}
+.fp-check-label:hover{border-color:var(--border2);color:var(--text)}
+.fp-check-label input{display:none}
+.fp-check-label.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.fp-divider{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.fp-clear{padding:4px 12px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;font-size:11px;color:#f87171;font-family:var(--font);cursor:pointer;transition:all 0.15s;margin-left:auto}
+.fp-clear:hover{background:#7f1d1d20}
+
+/* REPORTS */
+.reports-overlay{position:fixed;inset:0;background:var(--bg);z-index:75;display:none;flex-direction:column;overflow:hidden;
+  background:radial-gradient(circle at 12% -8%,rgba(59,130,246,0.20),transparent 34%),linear-gradient(135deg,#06152e 0%,#08224e 48%,#0b3f81 100%)}
+.reports-overlay.open{display:flex}
+.reports-header{display:flex;align-items:center;gap:8px;padding:0 24px;height:56px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;backdrop-filter:blur(18px);flex-wrap:wrap}
+.reports-title{font-size:14px;font-weight:500;color:var(--text);margin-right:4px;white-space:nowrap}
+.period-btn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;font-size:12px;color:var(--text2);font-family:var(--font);cursor:pointer;transition:all 0.12s;white-space:nowrap}
+.period-btn:hover{border-color:var(--border2);color:var(--text)}
+.period-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.report-custom-dates{display:flex;align-items:center;gap:6px}
+.report-date-input{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;color:var(--text);font-family:var(--font);outline:none}
+.report-date-input:focus{border-color:var(--border2)}
+.report-actions-btns{display:flex;gap:6px;margin-left:auto}
+.reports-body{flex:1;overflow-y:auto;padding:24px}
+.report-section-title{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin:20px 0 10px}
+.report-section-title:first-child{margin-top:0}
+.report-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.summary-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 12px;text-align:center}
+.summary-num{font-size:22px;font-weight:300;color:var(--text);font-variant-numeric:tabular-nums;line-height:1}
+.summary-sub{font-size:10px;color:var(--text3);margin-top:4px;text-transform:uppercase;letter-spacing:0.05em}
+.report-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+@media(max-width:900px){.report-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.report-grid{grid-template-columns:1fr}}
+.report-widget{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px}
+.widget-title{font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px}
+.widget-empty{font-size:12px;color:var(--text3);text-align:center;padding:12px 0}
+.rbar-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.rbar-label{font-size:12px;color:var(--text2);width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.rbar-track{flex:1;height:6px;background:rgba(147,197,253,0.08);border-radius:3px;overflow:hidden}
+.rbar-fill{height:100%;border-radius:3px;transition:width 0.4s}
+.rbar-count{font-size:11px;color:var(--text3);min-width:22px;text-align:right;font-family:var(--mono)}
+.rbar-pct{font-size:10px;color:var(--text3);min-width:32px;text-align:right}
+.report-period-note{font-size:12px;color:var(--text3);margin-bottom:16px}
+.report-close-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;font-family:var(--font);padding:2px 6px;border-radius:4px;transition:color 0.15s;margin-left:4px}
+/* BOARD TABS */
+.board-tabs{display:flex;gap:2px;background:rgba(147,197,253,0.06);border:1px solid var(--border);border-radius:8px;padding:3px}
+.board-tab{padding:4px 14px;border-radius:6px;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--text3);font-family:var(--font);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.board-tab:hover{color:var(--text2)}
+.board-tab.active{background:var(--blue);color:#fff}
+
+.report-close-btn:hover{color:var(--text)}
+@media print{
+  body{background:#fff!important;color:#000!important}
+  .reports-overlay{position:static!important;background:#fff!important;display:block!important}
+  .reports-header{background:#fff!important;border-bottom:1px solid #ccc!important}
+  .report-actions-btns,.report-close-btn,.period-btn{display:none!important}
+  .reports-body{padding:16px!important}
+  .summary-card,.report-widget{background:#f8f8f8!important;border:1px solid #ddd!important;break-inside:avoid}
+  .summary-num,.reports-title,.widget-title,.rbar-label,.summary-sub,.rbar-count,.rbar-pct,.report-period-note,.report-section-title{color:#000!important}
+  .rbar-track{background:#e0e0e0!important}
+  #app,#loginScreen,#changePwScreen,#msConnectScreen,.loading-bar,.toast,.lightbox{display:none!important}
+  .report-grid{grid-template-columns:repeat(2,1fr)!important}
+}
 
 /* MODAL */
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;overflow-y:auto;padding:2rem 1rem}
@@ -187,7 +272,24 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .upload-preview{border-radius:8px;overflow:hidden;margin-bottom:8px;cursor:zoom-in;background:var(--bg3);border:1px solid var(--border)}
 .upload-preview img{width:100%;max-height:120px;object-fit:cover;display:block}
 .upload-preview-vid{height:68px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer}
+.carousel-img-thumb{position:relative;width:72px;height:72px;border-radius:6px;overflow:hidden;border:1px solid var(--border);flex-shrink:0}
+.carousel-img-thumb img{width:100%;height:100%;object-fit:cover;cursor:pointer}
+.carousel-img-thumb .ci-remove{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,0.7);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1}
+.carousel-img-thumb .ci-remove:hover{background:#ef4444}
+.carousel-img-thumb .ci-num{position:absolute;bottom:2px;left:3px;font-size:9px;color:rgba(255,255,255,0.8);font-family:var(--mono)}
 .modal-footer{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-top:1px solid var(--border)}
+
+/* USER SETTINGS */
+.user-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;gap:10px}
+.user-row-info{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.user-badge{font-size:10px;padding:2px 8px;border-radius:999px;font-weight:500}
+.user-badge.admin{background:rgba(59,130,246,0.2);color:#3b82f6}
+.user-badge.user-role{background:rgba(147,197,253,0.08);color:var(--text3)}
+.user-badge.must-change{background:rgba(232,168,59,0.15);color:#e8a83b}
+.user-actions{display:flex;gap:6px;align-items:center}
+.user-action-btn{padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;font-size:11px;color:var(--text2);font-family:var(--font);cursor:pointer;transition:all 0.15s}
+.user-action-btn:hover{border-color:var(--border2);background:var(--bg4)}
+.users-add-row{display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin-top:10px}
 
 /* TOAST */
 .toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--text);z-index:200;opacity:0;transform:translateY(8px);transition:all 0.2s;pointer-events:none;overflow:hidden}
@@ -223,21 +325,59 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
   <div class="lightbox-label" id="lightboxLabel"></div>
 </div>
 
-<!-- LOGIN -->
-<div id="loginScreen">
+<!-- MS CONNECT SCREEN (admin setup, shown when OneDrive not linked) -->
+<div class="auth-screen" id="msConnectScreen">
   <div class="login-card">
     <div class="login-logo">Socieva Studio</div>
-    <div class="login-title">Content Board</div>
-    <div class="login-sub">Sign in with your Microsoft account to access the Capital.com Arabic production board.</div>
-    <button class="btn-login" id="loginBtn">
+    <div class="login-title">Service Setup</div>
+    <div class="login-sub">Connect the OneDrive service account to enable shared storage. This is a one-time setup per device.</div>
+    <button class="btn-auth" id="msConnectBtn">
       <svg class="ms-icon" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
         <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
         <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
         <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
       </svg>
-      Sign in with Microsoft
+      Connect Service Account
     </button>
+    <div class="auth-error" id="msConnectError" style="margin-top:10px"></div>
+    <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Testing without OneDrive?</div>
+      <button class="btn-auth" id="localModeBtn" style="background:var(--bg3);border:1px solid var(--border)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Test Locally (no OneDrive)
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- INTERNAL LOGIN SCREEN -->
+<div class="auth-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">Socieva Studio</div>
+    <div class="login-title">Content Board</div>
+    <div class="login-sub">Sign in to access the Capital.com Arabic production board.</div>
+    <label class="auth-label">Username</label>
+    <input class="auth-input" type="text" id="loginUsername" placeholder="your username" autocomplete="username" autocapitalize="none">
+    <label class="auth-label">Password</label>
+    <input class="auth-input" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+    <div class="auth-error" id="loginError"></div>
+    <button class="btn-auth" id="loginSubmitBtn">Sign in</button>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD SCREEN -->
+<div class="auth-screen" id="changePwScreen">
+  <div class="login-card">
+    <div class="login-logo">Socieva Studio</div>
+    <div class="login-title">Set New Password</div>
+    <div class="login-sub">Welcome, <strong id="changePwUsername"></strong>. You must set a new password before continuing.</div>
+    <label class="auth-label">New password</label>
+    <input class="auth-input" type="password" id="changePwNew" placeholder="Min. 8 characters" autocomplete="new-password">
+    <label class="auth-label">Confirm password</label>
+    <input class="auth-input" type="password" id="changePwConfirm" placeholder="Repeat password" autocomplete="new-password">
+    <div class="auth-error" id="changePwError"></div>
+    <button class="btn-auth" id="changePwSubmitBtn">Set password &amp; continue</button>
   </div>
 </div>
 
@@ -248,39 +388,104 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       <span class="brand"><span>Socieva</span> Studio</span>
       <div class="divider-v"></div>
       <span class="board-label">Capital.com Arabic</span>
+      <div class="divider-v"></div>
+      <div class="board-tabs">
+        <button class="board-tab active" data-mode="videos">Videos</button>
+        <button class="board-tab" data-mode="carousels">Carousels</button>
+      </div>
     </div>
     <div class="topbar-right">
       <input class="search" type="text" placeholder="Search..." id="searchInput">
-      <select class="filter" id="filterCat">
-        <option value="">All categories</option>
-        <option value="Education">Education</option>
-        <option value="Market">Market</option>
-        <option value="Motivation">Motivation</option>
-        <option value="Challenge">Challenge</option>
-        <option value="Funny">Funny</option>
-        <option value="Branding">Branding</option>
-        <option value="Story">Story</option>
-        <option value="Top XXX">Top XXX</option>
-        <option value="General">General</option>
-      </select>
-      <select class="filter" id="filterPresenter">
-        <option value="">All presenters</option>
-        <option value="Mustafa">Mustafa</option>
-        <option value="Saad">Saad</option>
-        <option value="Sara">Sara</option>
-      </select>
-      <select class="filter" id="filterAssign">
-        <option value="">All assigned</option>
-        <option value="Ahmed">Ahmed</option>
-        <option value="Sara">Sara</option>
-        <option value="Aya">Aya</option>
-        <option value="Mostafa">Mostafa</option>
-        <option value="Saad">Saad</option>
-      </select>
-      <button class="btn btn-primary" id="openAddBtn">+ New video</button>
-      <button class="btn" id="openSettingsBtn">Settings</button>
+      <button class="filter-toggle-btn" id="filterToggleBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+        Filters
+        <span class="filter-count" id="filterCount" style="display:none">0</span>
+      </button>
+      <div class="sort-wrap">
+        <span style="font-size:11px;color:var(--text3)">Sort</span>
+        <select class="filter" id="sortBySelect" style="width:auto">
+          <option value="priority">Priority</option>
+          <option value="dueDate">Due date</option>
+          <option value="postDate">Post date</option>
+          <option value="name">Name</option>
+          <option value="createdAt">Created</option>
+        </select>
+        <button class="sort-dir-btn" id="sortDirBtn" title="Toggle sort direction">↑</button>
+      </div>
+      <button class="btn" id="openReportsBtn">Reports</button>
+      <button class="btn btn-primary" id="openAddBtn">+ New</button>
+      <button class="btn" id="openSettingsBtn" style="display:none">Settings</button>
       <span id="syncDot" style="width:6px;height:6px;border-radius:50%;background:var(--border2);display:inline-block;flex-shrink:0;transition:background 0.4s" title="Sync status"></span>
+      <button id="exitLocalModeBtn" title="Exit test mode and return to OneDrive" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed55;cursor:pointer">⚠ Test Mode</button>
       <div class="user-avatar" id="userAvatar" title="Sign out">?</div>
+    </div>
+  </div>
+
+  <!-- FILTER PANEL -->
+  <div class="filter-panel" id="filterPanel">
+    <!-- Stage -->
+    <div class="fp-row">
+      <span class="fp-label">Stage</span>
+      <div class="fp-pill-group" id="fpStageGroup">
+        <button class="fp-pill active" data-val="">All</button>
+        <button class="fp-pill" data-val="0">Script</button>
+        <button class="fp-pill" data-val="1">Recording</button>
+        <button class="fp-pill" data-val="2">Editing</button>
+        <button class="fp-pill" data-val="3">Ready</button>
+        <button class="fp-pill" data-val="4">Posted</button>
+      </div>
+      <div class="fp-divider"></div>
+      <span class="fp-label">Format</span>
+      <div class="fp-pill-group" id="fpFormatGroup">
+        <button class="fp-pill active" data-val="">All</button>
+        <button class="fp-pill" data-val="Short">Short</button>
+        <button class="fp-pill" data-val="Long">Long</button>
+      </div>
+    </div>
+    <!-- Dropdowns row -->
+    <div class="fp-row">
+      <span class="fp-label">Category</span>
+      <select class="fp-select" id="fpCategory"><option value="">All</option></select>
+      <span class="fp-label" style="margin-left:4px">Priority</span>
+      <select class="fp-select" id="fpPriority">
+        <option value="">All</option><option>High</option><option>Medium</option><option>Low</option>
+      </select>
+      <span class="fp-label" style="margin-left:4px">Compliance</span>
+      <select class="fp-select" id="fpCompliance">
+        <option value="">All</option><option>Approved</option><option>Pending</option><option>Rejected</option>
+      </select>
+      <div class="fp-divider"></div>
+      <span class="fp-label">Presenter</span>
+      <select class="fp-select" id="fpPresenter"><option value="">All</option></select>
+      <span class="fp-label" style="margin-left:4px">Assigned</span>
+      <select class="fp-select" id="fpAssign"><option value="">All</option></select>
+      <span class="fp-label" style="margin-left:4px">Editor</span>
+      <select class="fp-select" id="fpEditor"><option value="">All</option></select>
+    </div>
+    <!-- Dates + text -->
+    <div class="fp-row">
+      <span class="fp-label">Post date</span>
+      <input class="fp-date" type="date" id="fpPostFrom" title="Post date from">
+      <span style="font-size:11px;color:var(--text3)">—</span>
+      <input class="fp-date" type="date" id="fpPostTo" title="Post date to">
+      <div class="fp-divider"></div>
+      <span class="fp-label">Due date</span>
+      <input class="fp-date" type="date" id="fpDueFrom" title="Due date from">
+      <span style="font-size:11px;color:var(--text3)">—</span>
+      <input class="fp-date" type="date" id="fpDueTo" title="Due date to">
+      <div class="fp-divider"></div>
+      <span class="fp-label">Channel</span>
+      <input class="fp-input" type="text" id="fpChannel" placeholder="Channel...">
+      <span class="fp-label" style="margin-left:4px">Segment</span>
+      <input class="fp-input" type="text" id="fpSegment" placeholder="Segment...">
+    </div>
+    <!-- Checkboxes + clear -->
+    <div class="fp-row">
+      <label class="fp-check-label" id="fpHasThumbLabel"><input type="checkbox" id="fpHasThumb"> Has thumbnail</label>
+      <label class="fp-check-label" id="fpHasVidLabel"><input type="checkbox" id="fpHasVid"> Has video</label>
+      <label class="fp-check-label" id="fpOverdueLabel"><input type="checkbox" id="fpOverdue"> Overdue only</label>
+      <label class="fp-check-label" id="fpDueSoonLabel"><input type="checkbox" id="fpDueSoon"> Due soon</label>
+      <button class="fp-clear" id="fpClearBtn">Clear all</button>
     </div>
   </div>
 
@@ -288,7 +493,30 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
   <div class="board-wrap"><div class="board" id="board"></div></div>
 </div>
 
-<!-- MODAL -->
+<!-- REPORTS OVERLAY -->
+<div class="reports-overlay" id="reportsOverlay">
+  <div class="reports-header">
+    <span class="reports-title">Reports</span>
+    <button class="period-btn active" data-period="all">All time</button>
+    <button class="period-btn" data-period="today">Today</button>
+    <button class="period-btn" data-period="week">This week</button>
+    <button class="period-btn" data-period="month">This month</button>
+    <button class="period-btn" data-period="custom">Custom</button>
+    <div class="report-custom-dates" id="reportCustomDates" style="display:none">
+      <input class="report-date-input" type="date" id="reportFromDate">
+      <span style="font-size:11px;color:var(--text3)">—</span>
+      <input class="report-date-input" type="date" id="reportToDate">
+    </div>
+    <div class="report-actions-btns">
+      <button class="btn" id="exportCsvBtn">Export CSV</button>
+      <button class="btn" id="printReportBtn">Print</button>
+    </div>
+    <button class="report-close-btn" id="closeReportsBtn">✕</button>
+  </div>
+  <div class="reports-body" id="reportsBody"></div>
+</div>
+
+<!-- VIDEO MODAL -->
 <div class="modal-bg" id="modalBg">
 <div class="modal">
   <div class="modal-header">
@@ -298,26 +526,22 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
   <div class="modal-body">
 
     <div class="section-title">Basic info</div>
-    <div class="field"><label>Video name</label><input type="text" id="fName" placeholder="e.g. How to trade gold 2025"></div>
+    <div class="field"><label id="fNameLabel">Video name <span id="fNameError" style="color:#f87171;font-size:11px;font-weight:400"></span></label><input type="text" id="fName" placeholder="e.g. How to trade gold 2025" oninput="document.getElementById('fNameError').textContent=''"></div>
     <div class="field-grid" style="margin-top:12px">
       <div class="field"><label>Format</label>
         <select id="fFormat"><option value="Short">Short</option><option value="Long">Long</option></select></div>
       <div class="field"><label>Category</label>
-        <select id="fCategory">
-          <option>Education</option><option>Market</option><option>Motivation</option>
-          <option>Challenge</option><option>Funny</option><option>Branding</option>
-          <option>Story</option><option>Top XXX</option><option>General</option>
-        </select></div>
+        <select id="fCategory"><option value="">—</option></select></div>
     </div>
     <div class="field-grid" style="margin-top:12px">
       <div class="field"><label>Presenter</label>
-        <select id="fPresenter"><option value="">—</option><option>Mustafa</option><option>Saad</option><option>Sara</option></select></div>
+        <select id="fPresenter"><option value="">—</option></select></div>
       <div class="field"><label>Assigned to</label>
-        <select id="fAssign"><option value="">—</option><option>Ahmed</option><option>Sara</option><option>Aya</option><option>Mostafa</option><option>Saad</option></select></div>
+        <select id="fAssign"><option value="">—</option></select></div>
     </div>
     <div class="field-grid" style="margin-top:12px">
       <div class="field"><label>Editor</label>
-        <select id="fEditor"><option value="">—</option><option>Ahmed</option><option>Mostafa</option><option>Sara</option></select></div>
+        <select id="fEditor"><option value="">—</option></select></div>
       <div class="field"><label>Priority</label>
         <select id="fPriority"><option value="">—</option><option>High</option><option>Medium</option><option>Low</option></select></div>
     </div>
@@ -340,17 +564,17 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
     <div class="field" style="margin-top:12px"><label>Notes</label>
       <textarea id="fNotes" placeholder="Hook idea, shoot notes, references..."></textarea></div>
 
-    <div class="section-title">Compliance & approval</div>
+    <div class="section-title">Compliance &amp; approval</div>
     <div class="field-grid">
       <div class="field"><label>Compliance</label>
         <select id="fCompliance"><option value="">—</option><option>Approved</option><option>Pending</option><option>Rejected</option></select></div>
       <div class="field"><label>Approved by</label>
-        <select id="fApprove"><option value="">—</option><option>Ahmed</option><option>Mustafa</option><option>Sara</option></select></div>
+        <select id="fApprove"><option value="">—</option></select></div>
     </div>
 
-    <div class="section-title" id="filesSectionTitle">Files (uploaded to OneDrive)</div>
+    <div class="section-title">Files (uploaded to OneDrive)</div>
     <div class="field-grid">
-      <div class="field">
+      <div class="field" id="thumbUploadField">
         <label>Thumbnail / photos</label>
         <div class="upload-preview" id="thumbPreview" style="display:none"></div>
         <div class="upload-box" id="thumbBox" onclick="document.getElementById('thumbFile').click()">
@@ -361,7 +585,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <div class="upload-status" id="thumbStatus"></div>
         <div class="upload-link" id="thumbLink"></div>
       </div>
-      <div class="field">
+      <div class="field" id="vidUploadField">
         <label>Final video version</label>
         <div class="upload-preview" id="vidPreview" style="display:none"></div>
         <div class="upload-box" id="vidBox" onclick="document.getElementById('vidFile').click()">
@@ -372,6 +596,22 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <div class="upload-status" id="vidStatus"></div>
         <div class="upload-link" id="vidLink"></div>
       </div>
+    </div>
+
+    <div class="field" id="carouselImagesField" style="display:none;margin-top:4px">
+      <label>Slides images <span id="carouselImageCount" style="color:var(--text3);font-size:11px;font-weight:400"></span></label>
+      <div id="carouselImagesGrid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:0"></div>
+      <div class="upload-box" id="carouselAddImgBox" onclick="document.getElementById('carouselImagesFile').click()" style="padding:12px 0">
+        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:20px;height:20px"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/><circle cx="8" cy="9" r="1.5" fill="currentColor" stroke="none"/></svg>
+        <span style="font-size:12px">Add images (select multiple)</span>
+      </div>
+      <input type="file" id="carouselImagesFile" accept="image/*" multiple style="display:none">
+      <div class="upload-status" id="carouselImagesStatus" style="margin-top:4px"></div>
+    </div>
+
+    <div class="field" id="slidesCountField" style="display:none;margin-top:12px">
+      <label>Slides count</label>
+      <input type="number" id="fSlidesCount" min="1" max="100" placeholder="e.g. 10">
     </div>
 
     <div class="section-title">Stage</div>
@@ -388,10 +628,10 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 
   </div>
   <div class="modal-footer">
-    <button class="btn btn-danger" id="deleteBtn" style="display:none">Delete video</button>
+    <button class="btn btn-danger" id="deleteBtn" style="display:none">Delete</button>
     <div style="display:flex;gap:8px;margin-left:auto">
       <button class="btn" id="cancelBtn">Cancel</button>
-      <button class="btn btn-primary" id="saveBtn">Save video</button>
+      <button class="btn btn-primary" id="saveBtn">Save</button>
     </div>
   </div>
 </div>
@@ -405,7 +645,22 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
     <button class="modal-close" id="closeSettingsBtn">✕</button>
   </div>
   <div class="modal-body">
-    <div class="section-title">People & roles</div>
+
+    <!-- USER ACCOUNTS (admin only) -->
+    <div class="section-title" style="border-top:none;padding-top:0;margin-top:0">User accounts</div>
+    <div class="settings-help">Manage login accounts. Password resets restore the default password and force a change on next login.</div>
+    <div class="settings-list" id="usersSettingsList"></div>
+    <div class="users-add-row">
+      <input class="settings-input" type="text" id="newUserNameInput" placeholder="Username (lowercase)" autocapitalize="none">
+      <select class="settings-input" id="newUserRoleInput">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button class="btn" id="addUserBtn">+ Add</button>
+    </div>
+
+    <!-- PEOPLE & ROLES -->
+    <div class="section-title">People &amp; roles</div>
     <div class="settings-help">Choose which names appear under Presenter, Assigned to, Editor, and Approved by.</div>
     <div class="settings-list" id="peopleSettingsList"></div>
     <div class="settings-add-row">
@@ -413,6 +668,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       <button class="btn" id="addPersonBtn">+ Add person</button>
     </div>
 
+    <!-- CATEGORIES -->
     <div class="section-title">Categories</div>
     <div class="settings-help">Categories control the board filter and the category field on each video.</div>
     <div class="settings-list" id="categorySettingsList"></div>
@@ -429,27 +685,38 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 </div>
 
 <script>
+// ========== CONFIG ==========
 const CLIENT_ID = 'd16994f5-e9f0-49d6-8ee6-3e1c3ad57bf0';
 const TENANT_ID = '4cd6b3cc-09bd-467e-a6ee-78d2c7926a5d';
 const SCOPES = ['Files.ReadWrite.All','User.Read','offline_access'];
 const FOLDER_NAME = 'Socieva-Board';
 const DATA_FILE = 'board-data.json';
+const USERS_FILE = 'users.json';
+const CAROUSELS_FILE = 'carousels-data.json';
 const SHARED_BOARD_FOLDER_URL = 'https://socievastudio-my.sharepoint.com/:f:/g/personal/itadmin_socievastudio_onmicrosoft_com/IgDUrDgaFrsPSbiRtH0EMGuhAXiI5eYbLKQLvnZhgUuFPlg?e=W3B70k';
-const SETTINGS_ADMIN_EMAILS = [
-  'ahmed@socievastudio.com',
-  'sara@socievastudio.com'
-];
 
+const LOCAL_MODE_KEY = 'sb_local_mode';
+const LOCAL_MODE = localStorage.getItem(LOCAL_MODE_KEY) === '1';
+
+const SEED_USERNAMES = ['majd','jamal','shamma','osaid','ahmed','aya','nawal','sara','mustafa'];
+const ADMIN_USERNAMES = ['ahmed','sara'];
+const DEFAULT_PASSWORD = '12AS223@';
+const SESSION_KEY = 'sb_session_v2';
+const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+// ========== MSAL ==========
 const msalConfig = {
   auth:{clientId:CLIENT_ID,authority:`https://login.microsoftonline.com/${TENANT_ID}`,redirectUri:window.location.origin+window.location.pathname},
   cache:{cacheLocation:'localStorage',storeAuthStateInCookie:false}
 };
-
 const msalApp = window.msal ? new msal.PublicClientApplication(msalConfig) : null;
-let accessToken = null;
-let currentUser = null;
+
+// ========== STATE ==========
+let currentSession = null;
+let boardUsers = [];
 let cards = [];
 let editId = null;
+let carouselImages = []; // [{shareUrl,itemId,downloadUrl}] for carousel multi-image
 let thumbOneDriveUrl = null;
 let vidOneDriveUrl = null;
 let thumbItemId = null;
@@ -460,7 +727,18 @@ let boardSettings = null;
 let settingsDraft = null;
 let boardDriveId = null;
 let boardRootItemId = null;
+let dragCardId = null;
+let pendingDelete = null;
+let expandedStages = new Set();
+let activeFilters = {q:'',format:'',stage:'',category:'',priority:'',compliance:'',presenter:'',assign:'',editor:'',postDateFrom:'',postDateTo:'',dueDateFrom:'',dueDateTo:'',channel:'',segment:'',hasThumb:false,hasVid:false,overdue:false,dueSoon:false};
+let sortBy = 'priority';
+let sortDir = 'asc';
+let filterPanelOpen = false;
+let boardMode = 'videos'; // 'videos' | 'carousels'
+let carouselCards = [];
+let carouselLoaded = false;
 
+// ========== CONSTANTS ==========
 const STAGES = ['Script','Recording','Under editing','Ready to post','Posted'];
 const DEFAULT_CATEGORIES = ['Education','Market','Motivation','Challenge','Funny','Branding','Story','Top XXX','General'];
 const ROLE_DEFS = [
@@ -470,11 +748,12 @@ const ROLE_DEFS = [
   {key:'approver',label:'Approver'}
 ];
 const CAT_TAG = {Education:'tag-edu',Market:'tag-mkt',Motivation:'tag-mot',Funny:'tag-fun','Top XXX':'tag-top',Branding:'tag-brd',Challenge:'tag-chl',General:'tag-gen',Story:'tag-str'};
-const AV_COLORS = {Ahmed:'#1d4ed8',Sara:'#6d28d9',Aya:'#b45309',Mostafa:'#065f46',Saad:'#7c2d12',Mustafa:'#1e3a5f'};
+const AV_COLORS = {};
 const PRI_COLORS = {High:'#f87171',Medium:'#e8a83b',Low:'#5ae8a0'};
 const PRI_ORDER = {High:0,Medium:1,Low:2};
-const CARD_COLLAPSE_LIMIT = 4;
+const CARD_COLLAPSE_LIMIT = 3;
 
+// ========== UTILITIES ==========
 function initials(n){if(!n)return'?';const p=n.trim().split(' ');return p.length>1?(p[0][0]+p[p.length-1][0]).toUpperCase():n.slice(0,2).toUpperCase()}
 function fmtDate(d){if(!d)return'';const p=d.split('-');const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return parseInt(p[2])+' '+m[parseInt(p[1])-1]}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
@@ -484,17 +763,489 @@ function jsArg(s){return escHtml(JSON.stringify(String(s??'')))}
 function norm(s){return String(s||'').trim().toLowerCase()}
 function pathPart(s){return encodeURIComponent(String(s))}
 function drivePath(...parts){return parts.map(pathPart).join('/')}
+
+// ========== LOCAL STORAGE BACKEND ==========
+function lsSet(key, data){ localStorage.setItem('sb_data_'+key, JSON.stringify(data)); }
+function lsGet(key){
+  const raw = localStorage.getItem('sb_data_'+key);
+  if(!raw){ const e=new Error('Not found'); e.status=404; throw e; }
+  return JSON.parse(raw);
+}
+
+// ========== CRYPTO / PASSWORDS ==========
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    {name:'PBKDF2', salt:enc.encode(salt), iterations:100000, hash:'SHA-256'},
+    keyMaterial, 256
+  );
+  return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function generateSalt() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// ========== SESSION ==========
+function saveSession(s) { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); currentSession = s; }
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !s.expiresAt || Date.now() > s.expiresAt) { localStorage.removeItem(SESSION_KEY); return null; }
+    return s;
+  } catch(e) { return null; }
+}
+function clearSession() { localStorage.removeItem(SESSION_KEY); currentSession = null; }
+
+// ========== USERS ==========
+async function loadUsers() {
+  if(LOCAL_MODE){
+    try{ const data=lsGet(USERS_FILE); boardUsers=Array.isArray(data.users)?data.users:[]; return true; }
+    catch(e){ if(e.status!==404)throw e; return false; }
+  }
+  try {
+    const meta = await apiCall(await boardPath(USERS_FILE));
+    const blob = await apiCall(await boardItemContentPath(meta.id), undefined, null, true);
+    const data = JSON.parse(await blob.text());
+    boardUsers = Array.isArray(data.users) ? data.users : [];
+    return true;
+  } catch(e) {
+    if (e.status !== 404) throw e;
+    return false;
+  }
+}
+
+async function saveUsers() {
+  if(LOCAL_MODE){ lsSet(USERS_FILE,{version:1,users:boardUsers}); return; }
+  const json = JSON.stringify({version:1, users:boardUsers}, null, 2);
+  await apiCall(`${await boardPath(USERS_FILE)}:/content`, 'PUT', new Blob([json],{type:'application/json'}));
+}
+
+async function bootstrapUsers() {
+  boardUsers = [];
+  for (const username of SEED_USERNAMES) {
+    const salt = generateSalt();
+    const passwordHash = await hashPassword(DEFAULT_PASSWORD, salt);
+    boardUsers.push({id:'u_'+uid(), username, passwordHash, salt, mustChangePassword:true,
+      role: ADMIN_USERNAMES.includes(username) ? 'admin' : 'user',
+      createdAt: new Date().toISOString()
+    });
+  }
+  await saveUsers();
+}
+
+async function validateCredentials(username, password) {
+  const user = boardUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (!user) return null;
+  const hash = await hashPassword(password, user.salt);
+  return hash === user.passwordHash ? user : null;
+}
+
+// ========== AUTH / SCREENS ==========
+function showScreen(id) {
+  ['msConnectScreen','loginScreen','changePwScreen'].forEach(s => {
+    document.getElementById(s).style.display = 'none';
+  });
+  document.getElementById('app').style.display = 'none';
+  if (id === 'app') { document.getElementById('app').style.display = 'block'; return; }
+  if (id) { document.getElementById(id).style.display = 'flex'; }
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!username || !password) { errEl.textContent = 'Enter username and password'; return; }
+  const btn = document.getElementById('loginSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Signing in...';
+  try {
+    const user = await validateCredentials(username, password);
+    if (!user) { errEl.textContent = 'Incorrect username or password'; btn.disabled=false; btn.textContent='Sign in'; return; }
+    if (user.mustChangePassword) {
+      currentSession = {userId:user.id, username:user.username, role:user.role, temp:true};
+      document.getElementById('changePwUsername').textContent = user.username;
+      document.getElementById('changePwError').textContent = '';
+      document.getElementById('changePwNew').value = '';
+      document.getElementById('changePwConfirm').value = '';
+      showScreen('changePwScreen');
+      return;
+    }
+    const session = {userId:user.id, username:user.username, role:user.role, expiresAt:Date.now()+SESSION_DURATION_MS};
+    saveSession(session);
+    await startBoardApp(session);
+  } catch(e) { errEl.textContent = 'Error: ' + e.message; }
+  btn.disabled = false; btn.textContent = 'Sign in';
+}
+
+async function doChangePassword() {
+  if (!currentSession?.temp) return;
+  const newPw = document.getElementById('changePwNew').value;
+  const confirmPw = document.getElementById('changePwConfirm').value;
+  const errEl = document.getElementById('changePwError');
+  errEl.textContent = '';
+  if (newPw.length < 8) { errEl.textContent = 'Password must be at least 8 characters'; return; }
+  if (newPw === DEFAULT_PASSWORD) { errEl.textContent = 'Cannot use the default password'; return; }
+  if (newPw !== confirmPw) { errEl.textContent = 'Passwords do not match'; return; }
+  const btn = document.getElementById('changePwSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const idx = boardUsers.findIndex(u => u.id === currentSession.userId);
+    if (idx === -1) throw new Error('User not found');
+    const newSalt = generateSalt();
+    boardUsers[idx].passwordHash = await hashPassword(newPw, newSalt);
+    boardUsers[idx].salt = newSalt;
+    boardUsers[idx].mustChangePassword = false;
+    await saveUsers();
+    const session = {userId:currentSession.userId, username:currentSession.username, role:currentSession.role, expiresAt:Date.now()+SESSION_DURATION_MS};
+    saveSession(session);
+    await startBoardApp(session);
+  } catch(e) { errEl.textContent = 'Error: ' + e.message; }
+  btn.disabled = false; btn.textContent = 'Set password & continue';
+}
+
+function doLogout() {
+  clearSession();
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').textContent = '';
+  showScreen('loginScreen');
+}
+
+// ========== MSAL / GRAPH ==========
 function sharedBoardFolderUrl(){return String(SHARED_BOARD_FOLDER_URL||'').trim()}
 function hasSharedBoardFolder(){return !!safeUrl(sharedBoardFolderUrl())}
-function accountIdentifiers(account){
-  if(!account)return[];
-  const claims=account.idTokenClaims||{};
-  return [account.username,account.name,claims.preferred_username,claims.email,claims.upn].map(norm).filter(Boolean);
+
+async function getBoardRoot(){
+  if(!hasSharedBoardFolder())return null;
+  if(boardDriveId&&boardRootItemId)return{driveId:boardDriveId,itemId:boardRootItemId};
+  const shared=await apiCall(`/shares/${encodeSharingUrl(sharedBoardFolderUrl())}/driveItem`);
+  const item=shared.remoteItem||shared;
+  const driveId=item.parentReference?.driveId||shared.parentReference?.driveId;
+  const itemId=item.id||shared.id;
+  if(!driveId||!itemId)throw new Error('Shared board folder link could not be resolved.');
+  boardDriveId=driveId; boardRootItemId=itemId;
+  return{driveId,itemId};
 }
-function canManageSettings(){
-  const admins=SETTINGS_ADMIN_EMAILS.map(norm).filter(Boolean);
-  return accountIdentifiers(currentUser).some(id=>admins.includes(id));
+async function boardPath(...parts){
+  const root=await getBoardRoot();
+  if(root)return`/drives/${root.driveId}/items/${root.itemId}:/${drivePath(...parts)}`;
+  return`/me/drive/root:/${drivePath(FOLDER_NAME,...parts)}`;
 }
+async function boardChildrenPath(){
+  const root=await getBoardRoot();
+  if(root)return`/drives/${root.driveId}/items/${root.itemId}/children`;
+  return`/me/drive/root:/${drivePath(FOLDER_NAME)}:/children`;
+}
+async function boardItemPath(itemId){
+  const root=await getBoardRoot();
+  if(root)return`/drives/${root.driveId}/items/${itemId}`;
+  return`/me/drive/items/${itemId}`;
+}
+async function boardItemContentPath(itemId){return`${await boardItemPath(itemId)}/content`}
+async function boardCreateLinkPath(itemId){return`${await boardItemPath(itemId)}/createLink`}
+
+function encodeSharingUrl(url){return'u!'+btoa(url).replace(/=/g,'').replace(/\//g,'_').replace(/\+/g,'-')}
+
+async function getToken(){
+  if(!msalApp)throw new Error('Microsoft auth library not loaded');
+  const accounts=msalApp.getAllAccounts();
+  if(!accounts.length)throw new Error('No service account connected');
+  try{
+    const res=await msalApp.acquireTokenSilent({scopes:SCOPES,account:accounts[0]});
+    return res.accessToken;
+  }catch(e){
+    const res=await msalApp.acquireTokenPopup({scopes:SCOPES});
+    return res.accessToken;
+  }
+}
+
+async function apiCall(url,method='GET',body=null,isBlob=false){
+  const token=await getToken();
+  const opts={method,headers:{'Authorization':'Bearer '+token}};
+  if(body&&!(body instanceof Blob)&&!(body instanceof ArrayBuffer)){
+    opts.headers['Content-Type']='application/json';
+    opts.body=JSON.stringify(body);
+  }else if(body){opts.body=body;}
+  const res=await fetch('https://graph.microsoft.com/v1.0'+url,opts);
+  if(!res.ok){const err=await res.text();const e=new Error(err||`${res.status} ${res.statusText}`);e.status=res.status;throw e;}
+  if(res.status===204)return null;
+  if(isBlob)return res.blob();
+  return res.json();
+}
+
+async function ensureFolder(){
+  if(LOCAL_MODE)return;
+  if(hasSharedBoardFolder()){await getBoardRoot();return;}
+  try{await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME)}`);}
+  catch(e){
+    if(e.status!==404)throw e;
+    await apiCall('/me/drive/root/children','POST',{name:FOLDER_NAME,folder:{},['@microsoft.graph.conflictBehavior']:'rename'});
+  }
+}
+
+async function ensureSubfolder(name){
+  if(LOCAL_MODE)return;
+  await ensureFolder();
+  try{await apiCall(await boardPath(name));}
+  catch(e){
+    if(e.status!==404)throw e;
+    try{await apiCall(await boardChildrenPath(),'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});}
+    catch(createErr){if(createErr.status!==409)throw createErr;}
+  }
+}
+
+// ========== INIT ==========
+async function init(){
+  // LOCAL TEST MODE — bypass OneDrive entirely
+  if(LOCAL_MODE){
+    setLoading(40);
+    try{
+      const usersExist=await loadUsers();
+      if(!usersExist){setLoading(60);await bootstrapUsers();}
+    }catch(e){showToast('Local storage error: '+e.message,'error');setLoading(0);return;}
+    setLoading(100);setTimeout(()=>setLoading(0),400);
+    const session=loadSession();
+    if(session){
+      const user=boardUsers.find(u=>u.id===session.userId);
+      if(user&&!user.mustChangePassword){session.role=user.role;saveSession(session);await startBoardApp(session);return;}
+    }
+    showScreen('loginScreen');
+    return;
+  }
+
+  if(!msalApp){showToast('Microsoft library unavailable','error');showScreen('msConnectScreen');return;}
+  await msalApp.initialize();
+  await msalApp.handleRedirectPromise();
+  const urlParams=new URLSearchParams(window.location.search);
+  if(urlParams.get('msconnect')==='1'){showScreen('msConnectScreen');return;}
+  const accounts=msalApp.getAllAccounts();
+  if(!accounts.length){showScreen('msConnectScreen');return;}
+  setLoading(20);
+  try{await getToken();}
+  catch(e){showScreen('msConnectScreen');setLoading(0);return;}
+  setLoading(40);
+  try{
+    await ensureFolder();
+    const usersExist=await loadUsers();
+    if(!usersExist){setLoading(60);await bootstrapUsers();showToast('Board initialized with default users','success');}
+  }catch(e){showToast('Storage error: '+e.message,'error');showScreen('msConnectScreen');setLoading(0);return;}
+  setLoading(100);setTimeout(()=>setLoading(0),500);
+  const session=loadSession();
+  if(session){
+    const user=boardUsers.find(u=>u.id===session.userId);
+    if(user&&!user.mustChangePassword){
+      session.role=user.role;
+      saveSession(session);
+      await startBoardApp(session);
+      return;
+    }
+  }
+  showScreen('loginScreen');
+}
+
+async function startBoardApp(session){
+  currentSession=session;
+  showScreen('app');
+  document.getElementById('userAvatar').textContent=initials(session.username);
+  document.getElementById('userAvatar').title=session.username+(session.role==='admin'?' (admin)':'')+' — click to sign out';
+  document.getElementById('openAddBtn').textContent='+ New Video';
+  setLoading(30);
+  try{
+    await ensureFolder();
+    await loadData();
+    setLoading(70);
+    await refreshDisplayUrls();
+    setLoading(100);setTimeout(()=>setLoading(0),500);
+  }catch(e){showToast('Board load error: '+e.message,'error');setLoading(0);}
+  refreshOptionLists();
+  updateSettingsAccess();
+  updateFilterBadge();
+  renderAll();
+  setInterval(async()=>{
+    if(!currentSession)return;
+    if(document.getElementById('modalBg').classList.contains('open'))return;
+    if(pendingDelete)return;
+    setSyncDot('syncing');
+    try{await loadData();refreshOptionLists();renderAll();setSyncDot('ok');}
+    catch(e){setSyncDot('error');}
+  },2*60*1000);
+  setInterval(async()=>{
+    if(!currentSession)return;
+    try{await refreshDisplayUrls();renderAll();}catch(e){}
+  },50*60*1000);
+}
+
+// ========== BOARD DATA ==========
+async function loadLegacyPersonalData(){
+  try{
+    const meta=await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}`);
+    const blob=await apiCall(`/me/drive/items/${meta.id}/content`,undefined,null,true);
+    parseBoardData(JSON.parse(await blob.text()));
+    return true;
+  }catch(e){if(e.status!==404)throw e;return false;}
+}
+
+function parseBoardData(data){
+  if(Array.isArray(data)){cards=data;boardSettings=defaultSettings();return;}
+  cards=Array.isArray(data?.cards)?data.cards:[];
+  boardSettings=normalizeSettings(data?.settings);
+}
+
+function buildBoardPayload(){return{version:2,settings:normalizeSettings(getSettings()),cards};}
+
+async function loadData(){
+  if(LOCAL_MODE){
+    const file=boardMode==='carousels'?CAROUSELS_FILE:DATA_FILE;
+    try{
+      const data=lsGet(file);
+      if(boardMode==='carousels'){cards=Array.isArray(data.cards)?data.cards:[];}
+      else{parseBoardData(data);}
+    }catch(e){
+      if(e.status!==404)throw e;
+      cards=[];
+      if(boardMode==='videos')boardSettings=defaultSettings();
+    }
+    return;
+  }
+  if(boardMode==='carousels'){
+    try{
+      const meta=await apiCall(await boardPath(CAROUSELS_FILE));
+      const blob=await apiCall(await boardItemContentPath(meta.id),undefined,null,true);
+      const data=JSON.parse(await blob.text());
+      cards=Array.isArray(data.cards)?data.cards:[];
+    }catch(e){
+      if(e.status!==404)throw e;
+      cards=[];
+    }
+    return;
+  }
+  try{
+    const meta=await apiCall(await boardPath(DATA_FILE));
+    const blob=await apiCall(await boardItemContentPath(meta.id),undefined,null,true);
+    parseBoardData(JSON.parse(await blob.text()));
+  }catch(e){
+    if(e.status!==404)throw e;
+    if(hasSharedBoardFolder()&&await loadLegacyPersonalData()){
+      await saveData();showToast('Board data moved to shared folder','success');
+    }else{cards=[];boardSettings=defaultSettings();}
+  }
+}
+
+async function saveData(){
+  if(LOCAL_MODE){
+    const file=boardMode==='carousels'?CAROUSELS_FILE:DATA_FILE;
+    const payload=boardMode==='carousels'?{version:1,cards}:buildBoardPayload();
+    lsSet(file,payload);
+    return;
+  }
+  if(boardMode==='carousels'){
+    const json=JSON.stringify({version:1,cards},null,2);
+    await apiCall(`${await boardPath(CAROUSELS_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}));
+    return;
+  }
+  const json=JSON.stringify(buildBoardPayload(),null,2);
+  await apiCall(`${await boardPath(DATA_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}));
+}
+
+async function switchBoardMode(mode){
+  if(boardMode===mode)return;
+  // back up current cards
+  if(boardMode==='videos') carouselCards=[];
+  boardMode=mode;
+  document.querySelectorAll('.board-tab').forEach(t=>t.classList.toggle('active',t.dataset.mode===mode));
+  const label=mode==='videos'?'Videos':'Carousels';
+  document.getElementById('openAddBtn').textContent='+ New '+label.slice(0,-1);
+  document.getElementById('modalTitle').textContent='New '+label.slice(0,-1);
+  document.getElementById('fpHasVidLabel').style.display=mode==='carousels'?'none':'';
+  // reset filters when switching modes
+  clearAllFilters();
+  setLoading(40);
+  try{
+    if(mode==='carousels'&&!carouselLoaded){
+      await loadData();
+      carouselLoaded=true;
+    }else{
+      await loadData();
+    }
+    await refreshDisplayUrls();
+    setLoading(100);setTimeout(()=>setLoading(0),400);
+  }catch(e){showToast('Error loading '+mode+': '+e.message,'error');setLoading(0);}
+  refreshOptionLists();
+  renderAll();
+}
+
+async function uploadFile(file,subfolder){
+  if(LOCAL_MODE){
+    const isImage=file.type.startsWith('image/');
+    let displayUrl;
+    if(isImage){
+      displayUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file);});
+    }else{
+      displayUrl=URL.createObjectURL(file);
+    }
+    return{shareUrl:displayUrl,itemId:'local_'+uid(),downloadUrl:displayUrl};
+  }
+  await ensureSubfolder(subfolder);
+  let res;
+  if(file.size<4*1024*1024){
+    res=await apiCall(`${await boardPath(subfolder,file.name)}:/content`,'PUT',file);
+  }else{
+    const session=await apiCall(`${await boardPath(subfolder,file.name)}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
+    const chunkSize=320*1024*10;let start=0;
+    while(start<file.size){
+      const end=Math.min(start+chunkSize,file.size);
+      const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:file.slice(start,end)});
+      const text=await r.text();
+      if(!r.ok)throw new Error(text||`Upload failed: ${r.status}`);
+      res=text?JSON.parse(text):null;start=end;
+    }
+  }
+  if(!res||!res.id)throw new Error('Upload finished without an item id');
+  const shareRes=await apiCall(await boardCreateLinkPath(res.id),'POST',{type:'view',scope:'organization'});
+  return{shareUrl:shareRes.link.webUrl,itemId:res.id,downloadUrl:res['@microsoft.graph.downloadUrl']||null};
+}
+
+async function refreshDisplayUrls(){
+  if(LOCAL_MODE)return;
+  await Promise.all(cards.map(async c=>{
+    if(c.thumbItemId){
+      try{const m=await apiCall(await boardItemPath(c.thumbItemId));c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}
+      catch(e){if(c.thumbUrl){try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.remoteItem?.id||m.id;c.thumbDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(inner){}}}
+    }else if(c.thumbUrl&&!c.thumbDisplayUrl){
+      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.remoteItem?.id||m.id;c.thumbDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(e){}
+    }
+    if(c.vidItemId){
+      try{const m=await apiCall(await boardItemPath(c.vidItemId));c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||c.vidDisplayUrl;}
+      catch(e){if(c.vidUrl){try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.remoteItem?.id||m.id;c.vidDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(inner){}}}
+    }else if(c.vidUrl&&!c.vidDisplayUrl){
+      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.remoteItem?.id||m.id;c.vidDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(e){}
+    }
+    // Refresh carousel images download URLs
+    if(Array.isArray(c.images)&&c.images.length){
+      await Promise.all(c.images.map(async img=>{
+        if(img.itemId){
+          try{const m=await apiCall(await boardItemPath(img.itemId));img.downloadUrl=m['@microsoft.graph.downloadUrl']||img.downloadUrl;}catch(e){}
+        }
+      }));
+    }
+  }));
+}
+
+// ========== SETTINGS ==========
+function defaultSettings(){return{categories:[...DEFAULT_CATEGORIES],people:[]};}
+function normalizeSettings(input){
+  const base=defaultSettings();
+  const categories=uniqueList(Array.isArray(input?.categories)?input.categories:base.categories);
+  const peopleSource=Array.isArray(input?.people)?input.people:base.people;
+  const people=peopleSource.map(p=>({id:String(p.id||uid()),name:String(p.name||'').trim(),roles:Array.isArray(p.roles)?p.roles.filter(r=>ROLE_DEFS.some(def=>def.key===r)):[]})).filter(p=>p.name);
+  return{categories:categories.length?categories:[...DEFAULT_CATEGORIES],people};
+}
+function getSettings(){if(!boardSettings)boardSettings=defaultSettings();return boardSettings;}
+function cloneSettings(s){return JSON.parse(JSON.stringify(s));}
+function canManageSettings(){return!!(currentSession&&currentSession.role==='admin');}
 function updateSettingsAccess(){
   const btn=document.getElementById('openSettingsBtn');
   if(!btn)return;
@@ -503,423 +1254,122 @@ function updateSettingsAccess(){
   btn.disabled=!allowed;
   if(!allowed&&document.getElementById('settingsBg').classList.contains('open'))closeSettings();
 }
-function dateOffset(days){const d=new Date();d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
+
 function uniqueList(values){
   const seen=new Set();
-  return values.map(v=>String(v||'').trim()).filter(v=>{
-    if(!v||seen.has(v))return false;
-    seen.add(v);
-    return true;
-  });
-}
-function defaultSettings(){
-  return {
-    categories:[...DEFAULT_CATEGORIES],
-    people:[
-      {id:'ahmed',name:'Ahmed',roles:['assigned','editor','approver']},
-      {id:'sara',name:'Sara',roles:['presenter','assigned','editor','approver']},
-      {id:'aya',name:'Aya',roles:['assigned']},
-      {id:'mostafa',name:'Mostafa',roles:['assigned','editor']},
-      {id:'saad',name:'Saad',roles:['presenter','assigned']},
-      {id:'mustafa',name:'Mustafa',roles:['presenter','approver']}
-    ]
-  };
-}
-function normalizeSettings(input){
-  const base=defaultSettings();
-  const categories=uniqueList(Array.isArray(input?.categories)?input.categories:base.categories);
-  const peopleSource=Array.isArray(input?.people)?input.people:base.people;
-  const people=peopleSource.map(p=>({
-    id:String(p.id||uid()),
-    name:String(p.name||'').trim(),
-    roles:Array.isArray(p.roles)?p.roles.filter(r=>ROLE_DEFS.some(def=>def.key===r)):[]
-  })).filter(p=>p.name);
-  return {
-    categories:categories.length?categories:[...DEFAULT_CATEGORIES],
-    people:people.length?people:base.people
-  };
-}
-function getSettings(){
-  if(!boardSettings)boardSettings=defaultSettings();
-  return boardSettings;
-}
-function cloneSettings(settings){
-  return JSON.parse(JSON.stringify(settings));
-}
-function parseBoardData(data){
-  if(Array.isArray(data)){
-    cards=data;
-    boardSettings=defaultSettings();
-    return;
-  }
-  cards=Array.isArray(data?.cards)?data.cards:[];
-  boardSettings=normalizeSettings(data?.settings);
-}
-function buildBoardPayload(){
-  return {
-    version:2,
-    settings:normalizeSettings(getSettings()),
-    cards
-  };
-}
-async function getBoardRoot(){
-  if(!hasSharedBoardFolder())return null;
-  if(boardDriveId&&boardRootItemId)return {driveId:boardDriveId,itemId:boardRootItemId};
-  const shared = await apiCall(`/shares/${encodeSharingUrl(sharedBoardFolderUrl())}/driveItem`);
-  const item = shared.remoteItem || shared;
-  const driveId = item.parentReference?.driveId || shared.parentReference?.driveId;
-  const itemId = item.id || shared.id;
-  if(!driveId||!itemId)throw new Error('Shared board folder link could not be resolved.');
-  boardDriveId=driveId;
-  boardRootItemId=itemId;
-  return {driveId,itemId};
-}
-async function boardPath(...parts){
-  const root=await getBoardRoot();
-  if(root)return `/drives/${root.driveId}/items/${root.itemId}:/${drivePath(...parts)}`;
-  return `/me/drive/root:/${drivePath(FOLDER_NAME,...parts)}`;
-}
-async function boardChildrenPath(){
-  const root=await getBoardRoot();
-  if(root)return `/drives/${root.driveId}/items/${root.itemId}/children`;
-  return `/me/drive/root:/${drivePath(FOLDER_NAME)}:/children`;
-}
-async function boardItemPath(itemId){
-  const root=await getBoardRoot();
-  if(root)return `/drives/${root.driveId}/items/${itemId}`;
-  return `/me/drive/items/${itemId}`;
-}
-async function boardItemContentPath(itemId){
-  return `${await boardItemPath(itemId)}/content`;
-}
-async function boardCreateLinkPath(itemId){
-  return `${await boardItemPath(itemId)}/createLink`;
-}
-async function loadLegacyPersonalData(){
-  try{
-    const meta = await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}`);
-    const blob = await apiCall(`/me/drive/items/${meta.id}/content`,undefined,null,true);
-    const text = await blob.text();
-    parseBoardData(JSON.parse(text));
-    return true;
-  }catch(e){
-    if(e.status!==404)throw e;
-    return false;
-  }
-}
-function dueDateStatus(dueDate,stage){
-  if(!dueDate||stage===4)return null;
-  const today=new Date();today.setHours(0,0,0,0);
-  const due=new Date(dueDate);due.setHours(0,0,0,0);
-  const diff=Math.round((due-today)/(864e5));
-  if(diff<0)return'overdue';
-  if(diff<=3)return'soon';
-  return null;
+  return values.map(v=>String(v||'').trim()).filter(v=>{if(!v||seen.has(v))return false;seen.add(v);return true;});
 }
 
-let dragCardId=null;
-let pendingDelete=null;
-let expandedStages=new Set();
-
-function setSyncDot(state){
-  const d=document.getElementById('syncDot');
-  if(!d)return;
-  if(state==='syncing'){d.style.background='#e8a83b';}
-  else if(state==='ok'){d.style.background='#5ae8a0';setTimeout(()=>{d.style.background='var(--border2)';},2000);}
-  else if(state==='error'){d.style.background='#f87171';setTimeout(()=>{d.style.background='var(--border2)';},4000);}
-}
-
-function showToast(msg,type=''){
-  if(pendingDelete)return; // لا تطغى على زر Undo
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.className='toast '+(type||'');
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),3000);
-}
-
-function setLoading(pct){document.getElementById('loadingBar').style.width=pct+'%'}
-
-async function getToken(){
-  if(!msalApp) throw new Error('Microsoft auth library is not loaded');
-  const accounts = msalApp.getAllAccounts();
-  if(!accounts.length) throw new Error('Not signed in');
-  try{
-    const res = await msalApp.acquireTokenSilent({scopes:SCOPES,account:accounts[0]});
-    return res.accessToken;
-  }catch(e){
-    const res = await msalApp.acquireTokenPopup({scopes:SCOPES});
-    return res.accessToken;
-  }
-}
-
-async function apiCall(url,method='GET',body=null,isBlob=false){
-  const token = await getToken();
-  const opts={method,headers:{'Authorization':'Bearer '+token}};
-  if(body && !(body instanceof Blob) && !(body instanceof ArrayBuffer)){
-    opts.headers['Content-Type']='application/json';
-    opts.body=JSON.stringify(body);
-  } else if(body){
-    opts.body=body;
-  }
-  const res = await fetch('https://graph.microsoft.com/v1.0'+url,opts);
-  if(!res.ok){
-    const err=await res.text();
-    const e = new Error(err || `${res.status} ${res.statusText}`);
-    e.status = res.status;
-    throw e;
-  }
-  if(res.status===204)return null;
-  if(isBlob)return res.blob();
-  return res.json();
-}
-
-async function ensureFolder(){
-  if(hasSharedBoardFolder()){
-    await getBoardRoot();
-    return;
-  }
-  try{
-    await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME)}`);
-  }catch(e){
-    if(e.status!==404)throw e;
-    await apiCall('/me/drive/root/children','POST',{name:FOLDER_NAME,folder:{},['@microsoft.graph.conflictBehavior']:'rename'});
-  }
-}
-
-async function ensureSubfolder(name){
-  await ensureFolder();
-  try{
-    await apiCall(await boardPath(name));
-  }catch(e){
-    if(e.status!==404)throw e;
-    try{
-      await apiCall(await boardChildrenPath(),'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});
-    }catch(createErr){
-      if(createErr.status!==409)throw createErr;
-    }
-  }
-}
-
-async function loadData(){
-  try{
-    const meta = await apiCall(await boardPath(DATA_FILE));
-    const blob = await apiCall(await boardItemContentPath(meta.id),undefined,null,true);
-    const text = await blob.text();
-    parseBoardData(JSON.parse(text));
-  }catch(e){
-    if(e.status!==404)throw e;
-    if(hasSharedBoardFolder() && await loadLegacyPersonalData()){
-      await saveData();
-      showToast('Existing board data moved to the shared folder','success');
-    }else{
-      cards = [];
-      boardSettings=defaultSettings();
-    }
-  }
-}
-
-async function saveData(){
-  const json = JSON.stringify(buildBoardPayload(),null,2);
-  const blob = new Blob([json],{type:'application/json'});
-  await apiCall(`${await boardPath(DATA_FILE)}:/content`,'PUT',blob);
-}
-
-async function uploadFile(file,subfolder){
-  await ensureSubfolder(subfolder);
-  let res;
-  if(file.size < 4*1024*1024){
-    res = await apiCall(`${await boardPath(subfolder,file.name)}:/content`,'PUT',file);
-  }else{
-    const session = await apiCall(`${await boardPath(subfolder,file.name)}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
-    const chunkSize = 320*1024*10;
-    let start=0;
-    while(start<file.size){
-      const end=Math.min(start+chunkSize,file.size);
-      const chunk=file.slice(start,end);
-      const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:chunk});
-      const text=await r.text();
-      if(!r.ok)throw new Error(text || `Upload failed: ${r.status} ${r.statusText}`);
-      res=text?JSON.parse(text):null;
-      start=end;
-    }
-  }
-  if(!res||!res.id)throw new Error('Upload finished without a OneDrive item id');
-  const shareRes = await apiCall(await boardCreateLinkPath(res.id),'POST',{type:'view',scope:'organization'});
-  return {
-    shareUrl: shareRes.link.webUrl,
-    itemId: res.id,
-    downloadUrl: res['@microsoft.graph.downloadUrl'] || null
-  };
-}
-
-async function init(){
-  if(!msalApp){
-    showToast('Microsoft login is unavailable.','error');
-    return;
-  }
-  await msalApp.initialize();
-  const res = await msalApp.handleRedirectPromise();
-  if(res){accessToken=res.accessToken}
-  const accounts = msalApp.getAllAccounts();
-  if(accounts.length){
-    await startApp(accounts[0]);
-  }
-}
-
-function encodeSharingUrl(url){
-  return 'u!'+btoa(url).replace(/=/g,'').replace(/\//g,'_').replace(/\+/g,'-');
-}
-
-async function refreshDisplayUrls(){
-  await Promise.all(cards.map(async c=>{
-    if(c.thumbItemId){
-      try{const m=await apiCall(await boardItemPath(c.thumbItemId));c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}
-      catch(e){
-        if(c.thumbUrl){
-          try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.remoteItem?.id||m.id;c.thumbDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(inner){}
-        }
-      }
-    }else if(c.thumbUrl&&!c.thumbDisplayUrl){
-      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.remoteItem?.id||m.id;c.thumbDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(e){}
-    }
-    if(c.vidItemId){
-      try{const m=await apiCall(await boardItemPath(c.vidItemId));c.vidDisplayUrl=m['@microsoft.graph.downloadUrl']||c.vidDisplayUrl;}
-      catch(e){
-        if(c.vidUrl){
-          try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.remoteItem?.id||m.id;c.vidDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(inner){}
-        }
-      }
-    }else if(c.vidUrl&&!c.vidDisplayUrl){
-      try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.remoteItem?.id||m.id;c.vidDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(e){}
-    }
-  }));
-}
-
-async function startApp(account){
-  currentUser = account;
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('app').style.display='block';
-  document.getElementById('userAvatar').textContent=initials(account.name||account.username);
-  document.getElementById('userAvatar').title=(account.name||account.username)+' — click to sign out';
-  document.querySelector('.board-label').textContent='Capital.com Arabic';
-  document.getElementById('filesSectionTitle').textContent='Files (uploaded to OneDrive)';
-  setLoading(30);
-  await ensureFolder();
-  setLoading(70);
-  await loadData();
-  setLoading(85);
-  await refreshDisplayUrls();
-  setLoading(100);
-  setTimeout(()=>setLoading(0),500);
-  refreshOptionLists();
-  updateSettingsAccess();
-  renderAll();
-
-  // Polling: تحديث صامت كل دقيقتين للبيانات فقط
-  setInterval(async()=>{
-    if(!currentUser)return;
-    if(document.getElementById('modalBg').classList.contains('open'))return;
-    if(pendingDelete)return;
-    setSyncDot('syncing');
-    try{await loadData();refreshOptionLists();renderAll();setSyncDot('ok');}
-    catch(e){setSyncDot('error');}
-  },2*60*1000);
-
-  // تجديد display URLs كل 50 دقيقة (قبل انتهاء الساعة)
-  setInterval(async()=>{
-    if(!currentUser)return;
-    try{await refreshDisplayUrls();renderAll();}catch(e){}
-  },50*60*1000);
-}
-
-document.getElementById('loginBtn').addEventListener('click',async()=>{
-  if(!msalApp){showToast('Microsoft login is unavailable. Use preview mode.','error');return;}
-  try{
-    const res = await msalApp.loginPopup({scopes:SCOPES});
-    await startApp(res.account);
-  }catch(e){showToast('Login failed: '+e.message,'error')}
-});
-
-document.getElementById('userAvatar').addEventListener('click',()=>{
-  if(msalApp)msalApp.logoutPopup();
-  location.reload();
-});
-
-function getFiltered(){
-  const q=(document.getElementById('searchInput').value||'').toLowerCase();
-  const cat=document.getElementById('filterCat').value;
-  const pre=document.getElementById('filterPresenter').value;
-  const asgn=document.getElementById('filterAssign').value;
-  return cards.filter(c=>{
-    if(q&&![c.name,c.channel,c.segment,c.presenter,c.assign,c.editor,c.seo,c.notes].some(v=>v&&v.toLowerCase().includes(q)))return false;
-    if(cat&&c.category!==cat)return false;
-    if(pre&&c.presenter!==pre)return false;
-    if(asgn&&c.assign!==asgn)return false;
-    return true;
-  });
-}
-
-function usedValues(field){
-  return cards.map(c=>c[field]).filter(Boolean);
-}
+function usedValues(field){return cards.map(c=>c[field]).filter(Boolean);}
 function peopleForRole(role,field){
   const settings=getSettings();
-  return uniqueList([
-    ...settings.people.filter(p=>p.roles.includes(role)).map(p=>p.name),
-    ...usedValues(field)
-  ]);
+  return uniqueList([...settings.people.filter(p=>p.roles.includes(role)).map(p=>p.name),...usedValues(field)]);
 }
-function categoriesForOptions(){
-  return uniqueList([...getSettings().categories,...usedValues('category')]);
-}
+function categoriesForOptions(){return uniqueList([...getSettings().categories,...usedValues('category')]);}
 function setSelectOptions(id,values,blankLabel){
-  const el=document.getElementById(id);
-  if(!el)return;
+  const el=document.getElementById(id);if(!el)return;
   const previous=el.value;
   const opts=uniqueList(values);
-  el.innerHTML=[
-    blankLabel!=null?`<option value="">${escHtml(blankLabel)}</option>`:'',
-    ...opts.map(v=>`<option value="${escHtml(v)}">${escHtml(v)}</option>`)
-  ].join('');
+  el.innerHTML=[blankLabel!=null?`<option value="">${escHtml(blankLabel)}</option>`:'',...opts.map(v=>`<option value="${escHtml(v)}">${escHtml(v)}</option>`)].join('');
   if(previous&&opts.includes(previous))el.value=previous;
   else if(blankLabel!=null)el.value='';
   else if(opts.length)el.value=opts[0];
 }
 function refreshOptionLists(){
   const categories=categoriesForOptions();
-  setSelectOptions('filterCat',categories,'All categories');
-  setSelectOptions('filterPresenter',peopleForRole('presenter','presenter'),'All presenters');
-  setSelectOptions('filterAssign',peopleForRole('assigned','assign'),'All assigned');
+  // Filter panel selects
+  setSelectOptions('fpCategory',categories,'All');
+  setSelectOptions('fpPresenter',peopleForRole('presenter','presenter'),'All');
+  setSelectOptions('fpAssign',peopleForRole('assigned','assign'),'All');
+  setSelectOptions('fpEditor',peopleForRole('editor','editor'),'All');
+  // Modal form selects
   setSelectOptions('fCategory',categories,null);
   setSelectOptions('fPresenter',peopleForRole('presenter','presenter'),'—');
   setSelectOptions('fAssign',peopleForRole('assigned','assign'),'—');
   setSelectOptions('fEditor',peopleForRole('editor','editor'),'—');
   setSelectOptions('fApprove',peopleForRole('approver','approve'),'—');
+  // Restore active filter values in panel
+  if(activeFilters.category)document.getElementById('fpCategory').value=activeFilters.category;
+  if(activeFilters.presenter)document.getElementById('fpPresenter').value=activeFilters.presenter;
+  if(activeFilters.assign)document.getElementById('fpAssign').value=activeFilters.assign;
+  if(activeFilters.editor)document.getElementById('fpEditor').value=activeFilters.editor;
 }
-function avatarColor(name){
-  if(!name)return'#333';
-  if(AV_COLORS[name])return AV_COLORS[name];
-  let hash=0;
-  for(let i=0;i<name.length;i++)hash=(hash*31+name.charCodeAt(i))>>>0;
-  const palette=['#1d4ed8','#6d28d9','#b45309','#065f46','#7c2d12','#0f766e','#be123c','#4338ca'];
-  return palette[hash%palette.length];
+
+// ========== USERS SETTINGS ==========
+function renderUsersSettings(){
+  if(!canManageSettings())return;
+  document.getElementById('usersSettingsList').innerHTML=boardUsers.map((u,i)=>`
+    <div class="user-row">
+      <div>
+        <div class="user-row-info">
+          <span style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(u.username)}</span>
+          <span class="user-badge ${u.role==='admin'?'admin':'user-role'}">${u.role}</span>
+          ${u.mustChangePassword?'<span class="user-badge must-change">must change pw</span>':''}
+          ${u.username===currentSession?.username?'<span style="font-size:10px;color:var(--text3)">(you)</span>':''}
+        </div>
+        <div class="user-actions" style="margin-top:6px">
+          <button class="user-action-btn" onclick="toggleUserRole(${i})">${u.role==='admin'?'Make user':'Make admin'}</button>
+          <button class="user-action-btn" onclick="resetUserPassword(${i})">Reset password</button>
+          ${u.username!==currentSession?.username?`<button class="user-action-btn" style="color:#f87171;border-color:#7f1d1d" onclick="deleteUser(${i})">Delete</button>`:''}
+        </div>
+      </div>
+    </div>`).join('');
 }
+
+async function toggleUserRole(i){
+  if(!canManageSettings())return;
+  boardUsers[i].role=boardUsers[i].role==='admin'?'user':'admin';
+  try{await saveUsers();renderUsersSettings();showToast('Role updated','success');}
+  catch(e){showToast('Error: '+e.message,'error');}
+}
+
+async function resetUserPassword(i){
+  if(!canManageSettings())return;
+  const u=boardUsers[i];
+  const salt=generateSalt();
+  boardUsers[i].passwordHash=await hashPassword(DEFAULT_PASSWORD,salt);
+  boardUsers[i].salt=salt;
+  boardUsers[i].mustChangePassword=true;
+  try{await saveUsers();renderUsersSettings();showToast(`Password reset for ${u.username}`,'success');}
+  catch(e){showToast('Error: '+e.message,'error');}
+}
+
+async function deleteUser(i){
+  if(!canManageSettings())return;
+  const u=boardUsers[i];
+  if(u.username===currentSession?.username)return;
+  boardUsers.splice(i,1);
+  try{await saveUsers();renderUsersSettings();showToast(`${u.username} removed`,'success');}
+  catch(e){showToast('Error: '+e.message,'error');}
+}
+
+async function addUser(){
+  if(!canManageSettings())return;
+  const nameEl=document.getElementById('newUserNameInput');
+  const roleEl=document.getElementById('newUserRoleInput');
+  const username=nameEl.value.trim().toLowerCase();
+  if(!username)return;
+  if(boardUsers.some(u=>u.username.toLowerCase()===username)){showToast('Username already exists','error');return;}
+  const salt=generateSalt();
+  const passwordHash=await hashPassword(DEFAULT_PASSWORD,salt);
+  boardUsers.push({id:'u_'+uid(),username,passwordHash,salt,mustChangePassword:true,role:roleEl.value,createdAt:new Date().toISOString()});
+  nameEl.value='';
+  try{await saveUsers();renderUsersSettings();showToast(`${username} added`,'success');}
+  catch(e){showToast('Error: '+e.message,'error');}
+}
+
+// ========== PEOPLE/CATEGORY SETTINGS ==========
 function openSettings(){
-  if(!canManageSettings()){
-    showToast('Settings are restricted for this account','error');
-    return;
-  }
+  if(!canManageSettings()){showToast('Settings restricted for this account','error');return;}
   settingsDraft=cloneSettings(getSettings());
   renderSettings();
+  renderUsersSettings();
   document.getElementById('settingsBg').classList.add('open');
 }
-function closeSettings(){
-  document.getElementById('settingsBg').classList.remove('open');
-  settingsDraft=null;
-}
+function closeSettings(){document.getElementById('settingsBg').classList.remove('open');settingsDraft=null;}
+
 function renderSettings(){
-  if(!canManageSettings())return;
-  if(!settingsDraft)return;
+  if(!canManageSettings()||!settingsDraft)return;
   document.getElementById('peopleSettingsList').innerHTML=settingsDraft.people.map((p,i)=>`
     <div class="settings-row">
       <div class="settings-row-main">
@@ -941,64 +1391,42 @@ function renderSettings(){
       </div>
       <button class="settings-delete delete-category-btn" data-index="${i}">Delete</button>
     </div>`).join('');
-
-  document.querySelectorAll('.person-name-input').forEach(el=>{
-    el.addEventListener('input',()=>{settingsDraft.people[parseInt(el.dataset.index)].name=el.value;});
-  });
+  document.querySelectorAll('.person-name-input').forEach(el=>{el.addEventListener('input',()=>{settingsDraft.people[parseInt(el.dataset.index)].name=el.value;});});
   document.querySelectorAll('.person-role-input').forEach(el=>{
     el.addEventListener('change',()=>{
       const person=settingsDraft.people[parseInt(el.dataset.index)];
       const roles=new Set(person.roles);
-      if(el.checked)roles.add(el.dataset.role);
-      else roles.delete(el.dataset.role);
+      if(el.checked)roles.add(el.dataset.role);else roles.delete(el.dataset.role);
       person.roles=[...roles];
     });
   });
-  document.querySelectorAll('.delete-person-btn').forEach(el=>{
-    el.addEventListener('click',()=>{
-      settingsDraft.people.splice(parseInt(el.dataset.index),1);
-      renderSettings();
-    });
-  });
-  document.querySelectorAll('.category-name-input').forEach(el=>{
-    el.addEventListener('input',()=>{settingsDraft.categories[parseInt(el.dataset.index)]=el.value;});
-  });
-  document.querySelectorAll('.delete-category-btn').forEach(el=>{
-    el.addEventListener('click',()=>{
-      settingsDraft.categories.splice(parseInt(el.dataset.index),1);
-      renderSettings();
-    });
-  });
+  document.querySelectorAll('.delete-person-btn').forEach(el=>{el.addEventListener('click',()=>{settingsDraft.people.splice(parseInt(el.dataset.index),1);renderSettings();});});
+  document.querySelectorAll('.category-name-input').forEach(el=>{el.addEventListener('input',()=>{settingsDraft.categories[parseInt(el.dataset.index)]=el.value;});});
+  document.querySelectorAll('.delete-category-btn').forEach(el=>{el.addEventListener('click',()=>{settingsDraft.categories.splice(parseInt(el.dataset.index),1);renderSettings();});});
 }
+
 function addSettingsPerson(){
   if(!canManageSettings())return;
   const input=document.getElementById('newPersonName');
-  const name=input.value.trim();
-  if(!name)return;
+  const name=input.value.trim();if(!name)return;
   if(!settingsDraft)settingsDraft=cloneSettings(getSettings());
   if(!settingsDraft.people.some(p=>p.name.toLowerCase()===name.toLowerCase())){
     settingsDraft.people.push({id:'person-'+uid(),name,roles:ROLE_DEFS.map(r=>r.key)});
   }
-  input.value='';
-  renderSettings();
+  input.value='';renderSettings();
 }
+
 function addSettingsCategory(){
   if(!canManageSettings())return;
   const input=document.getElementById('newCategoryName');
-  const name=input.value.trim();
-  if(!name)return;
+  const name=input.value.trim();if(!name)return;
   if(!settingsDraft)settingsDraft=cloneSettings(getSettings());
-  if(!settingsDraft.categories.some(c=>c.toLowerCase()===name.toLowerCase())){
-    settingsDraft.categories.push(name);
-  }
-  input.value='';
-  renderSettings();
+  if(!settingsDraft.categories.some(c=>c.toLowerCase()===name.toLowerCase())){settingsDraft.categories.push(name);}
+  input.value='';renderSettings();
 }
+
 async function saveSettings(){
-  if(!canManageSettings()){
-    showToast('Settings are restricted for this account','error');
-    return;
-  }
+  if(!canManageSettings()){showToast('Settings restricted','error');return;}
   if(!settingsDraft)return;
   const btn=document.getElementById('saveSettingsBtn');
   btn.textContent='Saving...';btn.disabled=true;
@@ -1006,13 +1434,153 @@ async function saveSettings(){
     boardSettings=normalizeSettings(settingsDraft);
     refreshOptionLists();
     await saveData();
-    closeSettings();
-    renderAll();
+    closeSettings();renderAll();
     showToast('Settings saved','success');
-  }catch(e){
-    showToast('Settings save failed: '+e.message,'error');
-  }
+  }catch(e){showToast('Save failed: '+e.message,'error');}
   btn.textContent='Save settings';btn.disabled=false;
+}
+
+// ========== BOARD RENDER ==========
+function setSyncDot(state){
+  const d=document.getElementById('syncDot');if(!d)return;
+  if(state==='syncing'){d.style.background='#e8a83b';}
+  else if(state==='ok'){d.style.background='#5ae8a0';setTimeout(()=>{d.style.background='var(--border2)';},2000);}
+  else if(state==='error'){d.style.background='#f87171';setTimeout(()=>{d.style.background='var(--border2)';},4000);}
+}
+
+function showToast(msg,type=''){
+  if(pendingDelete&&type!=='error')return;
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast '+(type||'');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function setLoading(pct){document.getElementById('loadingBar').style.width=pct+'%'}
+
+function dueDateStatus(dueDate,stage){
+  if(!dueDate||stage===4)return null;
+  const today=new Date();today.setHours(0,0,0,0);
+  const due=new Date(dueDate);due.setHours(0,0,0,0);
+  const diff=Math.round((due-today)/(864e5));
+  if(diff<0)return'overdue';
+  if(diff<=3)return'soon';
+  return null;
+}
+
+function avatarColor(name){
+  if(!name)return'#333';
+  if(AV_COLORS[name])return AV_COLORS[name];
+  let hash=0;
+  for(let i=0;i<name.length;i++)hash=(hash*31+name.charCodeAt(i))>>>0;
+  const palette=['#1d4ed8','#6d28d9','#b45309','#065f46','#7c2d12','#0f766e','#be123c','#4338ca'];
+  return palette[hash%palette.length];
+}
+
+function getFiltered(){
+  const f=activeFilters;
+  return cards.filter(c=>{
+    if(f.q&&![c.name,c.channel,c.segment,c.presenter,c.assign,c.editor,c.seo,c.notes].some(v=>v&&v.toLowerCase().includes(f.q)))return false;
+    if(f.format&&c.format!==f.format)return false;
+    if(f.stage!==''&&c.stage!==parseInt(f.stage))return false;
+    if(f.category&&c.category!==f.category)return false;
+    if(f.priority&&c.priority!==f.priority)return false;
+    if(f.compliance&&c.compliance!==f.compliance)return false;
+    if(f.presenter&&c.presenter!==f.presenter)return false;
+    if(f.assign&&c.assign!==f.assign)return false;
+    if(f.editor&&c.editor!==f.editor)return false;
+    if(f.postDateFrom&&(!c.postDate||c.postDate<f.postDateFrom))return false;
+    if(f.postDateTo&&(!c.postDate||c.postDate>f.postDateTo))return false;
+    if(f.dueDateFrom&&(!c.dueDate||c.dueDate<f.dueDateFrom))return false;
+    if(f.dueDateTo&&(!c.dueDate||c.dueDate>f.dueDateTo))return false;
+    if(f.channel&&!((c.channel||'').toLowerCase().includes(f.channel.toLowerCase())))return false;
+    if(f.segment&&!((c.segment||'').toLowerCase().includes(f.segment.toLowerCase())))return false;
+    if(f.hasThumb&&!c.thumbUrl)return false;
+    if(f.hasVid&&!c.vidUrl)return false;
+    if(f.overdue&&dueDateStatus(c.dueDate,c.stage)!=='overdue')return false;
+    if(f.dueSoon&&dueDateStatus(c.dueDate,c.stage)!=='soon')return false;
+    return true;
+  });
+}
+
+function countActiveFilters(){
+  const f=activeFilters;
+  let n=0;
+  if(f.q)n++;if(f.format)n++;if(f.stage!=='')n++;if(f.category)n++;
+  if(f.priority)n++;if(f.compliance)n++;if(f.presenter)n++;if(f.assign)n++;
+  if(f.editor)n++;if(f.postDateFrom)n++;if(f.postDateTo)n++;
+  if(f.dueDateFrom)n++;if(f.dueDateTo)n++;if(f.channel)n++;if(f.segment)n++;
+  if(f.hasThumb)n++;if(f.hasVid)n++;if(f.overdue)n++;if(f.dueSoon)n++;
+  return n;
+}
+
+function updateFilterBadge(){
+  const n=countActiveFilters();
+  const btn=document.getElementById('filterToggleBtn');
+  const badge=document.getElementById('filterCount');
+  badge.textContent=n;
+  badge.style.display=n?'inline-block':'none';
+  btn.classList.toggle('has-filters',n>0);
+  btn.classList.toggle('active',filterPanelOpen);
+}
+
+function syncFilterPanelUI(){
+  const f=activeFilters;
+  // Stage pills
+  document.querySelectorAll('#fpStageGroup .fp-pill').forEach(p=>{
+    p.classList.toggle('active',p.dataset.val===f.stage);
+  });
+  // Format pills
+  document.querySelectorAll('#fpFormatGroup .fp-pill').forEach(p=>{
+    p.classList.toggle('active',p.dataset.val===f.format);
+  });
+  // Selects
+  ['fpCategory','fpPriority','fpCompliance','fpPresenter','fpAssign','fpEditor'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const key={fpCategory:'category',fpPriority:'priority',fpCompliance:'compliance',fpPresenter:'presenter',fpAssign:'assign',fpEditor:'editor'}[id];
+    el.value=f[key]||'';
+    el.classList.toggle('active',!!(f[key]));
+  });
+  // Dates
+  ['fpPostFrom','fpPostTo','fpDueFrom','fpDueTo'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const key={fpPostFrom:'postDateFrom',fpPostTo:'postDateTo',fpDueFrom:'dueDateFrom',fpDueTo:'dueDateTo'}[id];
+    el.value=f[key]||'';el.classList.toggle('active',!!f[key]);
+  });
+  // Text inputs
+  document.getElementById('fpChannel').value=f.channel||'';
+  document.getElementById('fpChannel').classList.toggle('active',!!f.channel);
+  document.getElementById('fpSegment').value=f.segment||'';
+  document.getElementById('fpSegment').classList.toggle('active',!!f.segment);
+  // Checkboxes
+  ['hasThumb','hasVid','overdue','dueSoon'].forEach(key=>{
+    const idMap={hasThumb:'fpHasThumb',hasVid:'fpHasVid',overdue:'fpOverdue',dueSoon:'fpDueSoon'};
+    const labelMap={hasThumb:'fpHasThumbLabel',hasVid:'fpHasVidLabel',overdue:'fpOverdueLabel',dueSoon:'fpDueSoonLabel'};
+    const cb=document.getElementById(idMap[key]);
+    if(cb)cb.checked=f[key];
+    const lb=document.getElementById(labelMap[key]);
+    if(lb)lb.classList.toggle('active',f[key]);
+  });
+}
+
+function applyFilter(key,value){
+  activeFilters[key]=value;
+  updateFilterBadge();
+  renderAll();
+}
+
+function clearAllFilters(){
+  activeFilters={q:'',format:'',stage:'',category:'',priority:'',compliance:'',presenter:'',assign:'',editor:'',postDateFrom:'',postDateTo:'',dueDateFrom:'',dueDateTo:'',channel:'',segment:'',hasThumb:false,hasVid:false,overdue:false,dueSoon:false};
+  document.getElementById('searchInput').value='';
+  syncFilterPanelUI();
+  updateFilterBadge();
+  renderAll();
+}
+
+function toggleFilterPanel(){
+  filterPanelOpen=!filterPanelOpen;
+  document.getElementById('filterPanel').classList.toggle('open',filterPanelOpen);
+  document.getElementById('filterToggleBtn').classList.toggle('active',filterPanelOpen);
 }
 
 function renderStats(){
@@ -1021,9 +1589,7 @@ function renderStats(){
   document.getElementById('statsBar').innerHTML=STAGES.map((s,i)=>{
     const fCount=fc.filter(c=>c.stage===i).length;
     const tCount=cards.filter(c=>c.stage===i).length;
-    const num=isFiltering
-      ?`${fCount}<span style="font-size:12px;color:var(--text3);font-weight:300">/${tCount}</span>`
-      :`${fCount}`;
+    const num=isFiltering?`${fCount}<span style="font-size:12px;color:var(--text3);font-weight:300">/${tCount}</span>`:`${fCount}`;
     return`<div class="stat"><div class="stat-num">${num}</div><div class="stat-label">${s}</div></div>`;
   }).join('');
 }
@@ -1039,16 +1605,42 @@ function renderCard(c){
   const thumbTile=thumbSrc
     ?`<div class="card-media-item has-file" title="Thumbnail preview" onclick="event.stopPropagation();openLightbox('img',${jsArg(thumbSrc)},${jsArg(c.name||'')})"><img src="${escHtml(thumbSrc)}" onerror="this.parentElement.classList.remove('has-file');this.parentElement.innerHTML='<div class=&quot;card-media-empty&quot;><svg viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.5&quot;><rect x=&quot;3&quot; y=&quot;5&quot; width=&quot;18&quot; height=&quot;14&quot; rx=&quot;2&quot;/><path d=&quot;M3 14l4-4 3 3 4-5 4 6&quot;/></svg><span>Thumbnail</span></div>'"><span class="card-media-caption">Thumbnail</span></div>`
     :`<div class="card-media-item" title="No thumbnail"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/></svg><span>Thumbnail</span></div></div>`;
-  const videoTile=vidSrc
-    ?`<div class="card-media-item has-file" title="Video preview" onclick="event.stopPropagation();openLightbox('vid',${jsArg(vidSrc)},${jsArg(c.name||'')})"><video src="${escHtml(vidSrc)}" muted playsinline preload="metadata"></video><div class="card-media-play">▶</div><span class="card-media-caption">Video</span></div>`
-    :`<div class="card-media-item" title="No video"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/></svg><span>Video</span></div></div>`;
+  const isCarouselCard=boardMode==='carousels';
+  let mediaSectionHtml;
+  if(isCarouselCard){
+    const imgs=Array.isArray(c.images)&&c.images.length?c.images:(c.thumbDisplayUrl?[{downloadUrl:c.thumbDisplayUrl,shareUrl:c.thumbUrl}]:[]);
+    if(!imgs.length){
+      mediaSectionHtml=`<div class="card-media" style="grid-template-columns:1fr"><div class="card-media-item" style="aspect-ratio:16/9"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/></svg><span>No images</span></div></div></div>`;
+    }else{
+      const show=imgs.slice(0,4);
+      const extra=imgs.length-4;
+      const cols=show.length===1?1:2;
+      const ratio=show.length===1?'16/9':'1/1';
+      const tiles=show.map((img,idx)=>{
+        const src=escHtml(safeUrl(img.downloadUrl||img.shareUrl)||'');
+        const isLastExtra=idx===3&&extra>0;
+        return`<div class="card-media-item has-file" style="aspect-ratio:${ratio};cursor:zoom-in" onclick="event.stopPropagation();openLightbox('img',${jsArg(safeUrl(img.downloadUrl||img.shareUrl))},${jsArg((c.name||'')+' · Slide '+(idx+1))})">
+          <img src="${src}" onerror="this.style.display='none'">
+          ${isLastExtra?`<div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">+${extra}</div>`:''}
+          <span class="card-media-caption">Slide ${idx+1}</span>
+        </div>`;
+      }).join('');
+      mediaSectionHtml=`<div class="card-media" style="grid-template-columns:repeat(${cols},1fr)">${tiles}</div>`;
+    }
+  }else{
+    const videoTile=vidSrc
+      ?`<div class="card-media-item has-file" title="Video preview" onclick="event.stopPropagation();openLightbox('vid',${jsArg(vidSrc)},${jsArg(c.name||'')})"><video src="${escHtml(vidSrc)}" muted playsinline preload="metadata"></video><div class="card-media-play">▶</div><span class="card-media-caption">Video</span></div>`
+      :`<div class="card-media-item" title="No video"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/></svg><span>Video</span></div></div>`;
+    mediaSectionHtml=`<div class="card-media">${thumbTile}${videoTile}</div>`;
+  }
   return`<div class="card" draggable="true" data-id="${escHtml(c.id)}">
-    <div class="card-media">${thumbTile}${videoTile}</div>
+    ${mediaSectionHtml}
     <div class="card-name">${escHtml(c.name)}</div>
     <div class="card-tags">
       <span class="tag ${catCls}">${escHtml(c.category)||'—'}</span>
       <span class="tag ${c.format==='Long'?'tag-long':'tag-short'}">${escHtml(c.format)||'Short'}</span>
       ${c.priority?`<span class="tag" style="background:#1a1a1a;color:${PRI_COLORS[c.priority]||'#888'}">${escHtml(c.priority)}</span>`:''}
+      ${c.slidesCount?`<span class="tag" style="background:#1a2535;color:#7ab8e8;font-family:var(--mono)">${c.slidesCount} slides</span>`:''}
       ${dueSt==='overdue'?`<span class="tag" style="background:#3f1010;color:#f87171">Overdue</span>`:''}
       ${dueSt==='soon'?`<span class="tag" style="background:#3f2a0a;color:#e8a83b">Due soon</span>`:''}
     </div>
@@ -1070,13 +1662,18 @@ function renderCard(c){
 }
 
 function sortCards(arr){
+  const dir=sortDir==='asc'?1:-1;
   return arr.slice().sort((a,b)=>{
-    const pa=PRI_ORDER[a.priority]??3, pb=PRI_ORDER[b.priority]??3;
-    if(pa!==pb)return pa-pb;
-    if(a.dueDate&&b.dueDate)return a.dueDate.localeCompare(b.dueDate);
-    if(a.dueDate)return -1;
-    if(b.dueDate)return 1;
-    return 0;
+    let va,vb;
+    switch(sortBy){
+      case'priority': va=PRI_ORDER[a.priority]??3; vb=PRI_ORDER[b.priority]??3; break;
+      case'dueDate':  va=a.dueDate||'9999'; vb=b.dueDate||'9999'; break;
+      case'postDate': va=a.postDate||'9999'; vb=b.postDate||'9999'; break;
+      case'name':     va=(a.name||'').toLowerCase(); vb=(b.name||'').toLowerCase(); break;
+      case'createdAt':va=a.id||''; vb=b.id||''; break;
+      default:        va=PRI_ORDER[a.priority]??3; vb=PRI_ORDER[b.priority]??3;
+    }
+    if(va<vb)return -1*dir; if(va>vb)return 1*dir; return 0;
   });
 }
 
@@ -1091,105 +1688,84 @@ function renderAll(){
     const visibleCards=expanded?stageCards:stageCards.slice(0,CARD_COLLAPSE_LIMIT);
     const hiddenCount=stageCards.length-visibleCards.length;
     const toggleHtml=stageCards.length>CARD_COLLAPSE_LIMIT
-      ?`<button class="show-more-btn" data-stage="${i}">${expanded?'Show less':`Show ${hiddenCount} more`}</button>`
-      :'';
-    return`
-      <div class="col">
-        <div class="col-head s${i}">
-          <span class="col-name">${s}</span>
-          <span class="col-count">${stageCards.length}</span>
-        </div>
-        <div class="cards" id="col-${i}">
-          ${visibleCards.map(renderCard).join('')}
-          ${toggleHtml}
-          <button class="add-card-btn" data-stage="${i}">+ Add video</button>
-        </div>
-      </div>`;
+      ?`<button class="show-more-btn" data-stage="${i}">${expanded?'Show less':`Show ${hiddenCount} more`}</button>`:'';
+    return`<div class="col">
+      <div class="col-head s${i}">
+        <span class="col-name">${s}</span>
+        <span class="col-count">${stageCards.length}</span>
+      </div>
+      <div class="cards" id="col-${i}">
+        ${visibleCards.map(renderCard).join('')}
+        ${toggleHtml}
+        <button class="add-card-btn" data-stage="${i}">+ Add ${boardMode==='carousels'?'carousel':'video'}</button>
+      </div>
+    </div>`;
   }).join('');
   if(bw)bw.scrollLeft=sx;
-
   document.querySelectorAll('.card').forEach(el=>{
     el.addEventListener('click',()=>openEdit(el.dataset.id));
-    el.addEventListener('dragstart',e=>{
-      dragCardId=el.dataset.id;
-      el.classList.add('dragging');
-      e.dataTransfer.effectAllowed='move';
-    });
-    el.addEventListener('dragend',()=>{
-      el.classList.remove('dragging');
-      document.querySelectorAll('.cards').forEach(c=>c.classList.remove('drag-over'));
-    });
+    el.addEventListener('dragstart',e=>{dragCardId=el.dataset.id;el.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    el.addEventListener('dragend',()=>{el.classList.remove('dragging');document.querySelectorAll('.cards').forEach(c=>c.classList.remove('drag-over'));});
   });
   document.querySelectorAll('.cards').forEach(col=>{
-    col.addEventListener('dragover',e=>{
-      e.preventDefault();
-      e.dataTransfer.dropEffect='move';
-      col.classList.add('drag-over');
-    });
-    col.addEventListener('dragleave',e=>{
-      if(!col.contains(e.relatedTarget))col.classList.remove('drag-over');
-    });
+    col.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';col.classList.add('drag-over');});
+    col.addEventListener('dragleave',e=>{if(!col.contains(e.relatedTarget))col.classList.remove('drag-over');});
     col.addEventListener('drop',async e=>{
-      e.preventDefault();
-      col.classList.remove('drag-over');
-      if(!dragCardId)return;
+      e.preventDefault();col.classList.remove('drag-over');if(!dragCardId)return;
       const newStage=parseInt(col.id.replace('col-',''));
       const card=cards.find(c=>c.id===dragCardId);
-      if(card&&card.stage!==newStage){
-        card.stage=newStage;
-        renderAll();
-        try{await saveData();}catch(err){showToast('Save failed: '+err.message,'error');}
-      }
+      if(card&&card.stage!==newStage){card.stage=newStage;renderAll();try{await saveData();}catch(err){showToast('Save failed: '+err.message,'error');}}
       dragCardId=null;
     });
   });
-  document.querySelectorAll('.add-card-btn').forEach(el=>{
-    el.addEventListener('click',()=>openAdd(parseInt(el.dataset.stage)));
-  });
+  document.querySelectorAll('.add-card-btn').forEach(el=>{el.addEventListener('click',()=>openAdd(parseInt(el.dataset.stage)));});
   document.querySelectorAll('.show-more-btn').forEach(el=>{
     el.addEventListener('click',()=>{
       const stage=parseInt(el.dataset.stage);
-      if(expandedStages.has(stage))expandedStages.delete(stage);
-      else expandedStages.add(stage);
+      if(expandedStages.has(stage))expandedStages.delete(stage);else expandedStages.add(stage);
       renderAll();
     });
   });
 }
 
+// ========== MODAL ==========
 function setPreview(type,url,name){
-  const prev=document.getElementById(type+'Preview');
-  if(!prev)return;
+  const prev=document.getElementById(type+'Preview');if(!prev)return;
   const su=safeUrl(url);
   if(!su){prev.style.display='none';prev.innerHTML='';return;}
-  if(type==='thumb'){
-    prev.innerHTML=`<img src="${escHtml(su)}" onclick="openLightbox('img',${jsArg(su)},${jsArg(name||'')})" onerror="this.parentElement.style.display='none'">`;
-  }else{
-    prev.innerHTML=`<div class="upload-preview-vid" onclick="openLightbox('vid',${jsArg(su)},${jsArg(name||'')})"><span style="font-size:22px">▶</span><span>Preview video</span></div>`;
-  }
+  if(type==='thumb'){prev.innerHTML=`<img src="${escHtml(su)}" onclick="openLightbox('img',${jsArg(su)},${jsArg(name||'')})" onerror="this.parentElement.style.display='none'">`;
+  }else{prev.innerHTML=`<div class="upload-preview-vid" onclick="openLightbox('vid',${jsArg(su)},${jsArg(name||'')})"><span style="font-size:22px">▶</span><span>Preview video</span></div>`;}
   prev.style.display='block';
 }
 
 function resetModal(){
+  const isCarousel=boardMode==='carousels';
   thumbOneDriveUrl=null;vidOneDriveUrl=null;
   thumbItemId=null;vidItemId=null;
   thumbDisplayUrl=null;vidDisplayUrl=null;
-  ['fName','fChannel','fSegment','fScript','fSeo','fNotes','fPostDate','fDueDate'].forEach(id=>document.getElementById(id).value='');
-  ['fFormat','fCategory','fPresenter','fAssign','fEditor','fPriority','fCompliance','fApprove','fStage'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el.options[0])el.selectedIndex=0;
-  });
+  carouselImages=[];
+  ['fName','fChannel','fSegment','fScript','fSeo','fNotes','fPostDate','fDueDate','fSlidesCount'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('slidesCountField').style.display=isCarousel?'flex':'none';
+  document.getElementById('vidUploadField').style.display=isCarousel?'none':'block';
+  document.getElementById('thumbUploadField').style.display=isCarousel?'none':'block';
+  document.getElementById('carouselImagesField').style.display=isCarousel?'block':'none';
+  if(isCarousel){renderCarouselImagesGrid();document.getElementById('carouselImagesStatus').textContent='';}
+  ['fFormat','fCategory','fPresenter','fAssign','fEditor','fPriority','fCompliance','fApprove','fStage'].forEach(id=>{const el=document.getElementById(id);if(el.options[0])el.selectedIndex=0;});
   document.getElementById('fFormat').value='Short';
-  document.getElementById('fCategory').value=categoriesForOptions()[0]||'General';
+  const firstCat=categoriesForOptions()[0]||'';
+  if(firstCat)document.getElementById('fCategory').value=firstCat;
   ['thumbStatus','vidStatus','thumbLink','vidLink'].forEach(id=>document.getElementById(id).textContent='');
   document.getElementById('thumbLabel').textContent='Upload image';
   document.getElementById('vidLabel').textContent='Upload video';
+  document.getElementById('fNameError').textContent='';
+  document.getElementById('fNameLabel').firstChild.textContent=isCarousel?'Carousel name ':'Video name ';
   ['thumbPreview','vidPreview'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.innerHTML='';});
 }
 
 function openAdd(stage){
   editId=null;resetModal();
   document.getElementById('fStage').value=stage||0;
-  document.getElementById('modalTitle').textContent='New video';
+  document.getElementById('modalTitle').textContent=boardMode==='carousels'?'New carousel':'New video';
   document.getElementById('deleteBtn').style.display='none';
   document.getElementById('modalBg').classList.add('open');
 }
@@ -1197,13 +1773,12 @@ function openAdd(stage){
 function openEdit(id){
   const c=cards.find(x=>x.id===id);if(!c)return;
   editId=id;resetModal();
-  thumbOneDriveUrl=c.thumbUrl||null;
-  vidOneDriveUrl=c.vidUrl||null;
-  document.getElementById('modalTitle').textContent='Edit video';
+  thumbOneDriveUrl=c.thumbUrl||null;vidOneDriveUrl=c.vidUrl||null;
+  document.getElementById('modalTitle').textContent=boardMode==='carousels'?'Edit carousel':'Edit video';
   document.getElementById('deleteBtn').style.display='';
   document.getElementById('fName').value=c.name||'';
   document.getElementById('fFormat').value=c.format||'Short';
-  document.getElementById('fCategory').value=c.category||'Education';
+  document.getElementById('fCategory').value=c.category||'';
   document.getElementById('fPresenter').value=c.presenter||'';
   document.getElementById('fAssign').value=c.assign||'';
   document.getElementById('fEditor').value=c.editor||'';
@@ -1218,74 +1793,316 @@ function openEdit(id){
   document.getElementById('fCompliance').value=c.compliance||'';
   document.getElementById('fApprove').value=c.approve||'';
   document.getElementById('fStage').value=c.stage||0;
+  document.getElementById('fSlidesCount').value=c.slidesCount||'';
+  if(boardMode==='carousels'&&Array.isArray(c.images)&&c.images.length){
+    carouselImages=c.images.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||img.shareUrl}));
+    renderCarouselImagesGrid();
+    document.getElementById('carouselImagesStatus').textContent=`${carouselImages.length} image${carouselImages.length>1?'s':''} uploaded ✓`;
+  }
   if(c.thumbUrl){
-    const thumbViewUrl=safeUrl(c.thumbUrl);
-    thumbItemId=c.thumbItemId||null;
-    thumbDisplayUrl=c.thumbDisplayUrl||null;
+    thumbItemId=c.thumbItemId||null;thumbDisplayUrl=c.thumbDisplayUrl||null;
     document.getElementById('thumbStatus').textContent='File uploaded ✓';
     document.getElementById('thumbLabel').textContent='Change image';
-    document.getElementById('thumbLink').innerHTML=thumbViewUrl?`<a href="${escHtml(thumbViewUrl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    const tv=safeUrl(c.thumbUrl);
+    document.getElementById('thumbLink').innerHTML=tv?`<a href="${escHtml(tv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
   if(c.vidUrl){
-    const vidViewUrl=safeUrl(c.vidUrl);
-    vidItemId=c.vidItemId||null;
-    vidDisplayUrl=c.vidDisplayUrl||null;
+    vidItemId=c.vidItemId||null;vidDisplayUrl=c.vidDisplayUrl||null;
     document.getElementById('vidStatus').textContent='File uploaded ✓';
     document.getElementById('vidLabel').textContent='Change video';
-    document.getElementById('vidLink').innerHTML=vidViewUrl?`<a href="${escHtml(vidViewUrl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    const vv=safeUrl(c.vidUrl);
+    document.getElementById('vidLink').innerHTML=vv?`<a href="${escHtml(vv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
     setPreview('vid',vidDisplayUrl,c.name);
   }
   document.getElementById('modalBg').classList.add('open');
 }
 
-function closeModal(){document.getElementById('modalBg').classList.remove('open')}
+function closeModal(){document.getElementById('modalBg').classList.remove('open');}
 
 async function handleUpload(file,type){
   const statusEl=document.getElementById(type+'Status');
   const boxEl=document.getElementById(type+'Box');
   const linkEl=document.getElementById(type+'Link');
-  statusEl.className='upload-status';
-  statusEl.textContent='Uploading...';
+  statusEl.className='upload-status';statusEl.textContent='Uploading...';
   boxEl.classList.add('uploading');
   try{
-    const result = await uploadFile(file,type==='thumb'?'thumbnails':'videos');
-    if(type==='thumb'){
-      thumbOneDriveUrl=result.shareUrl;
-      thumbItemId=result.itemId;
-      thumbDisplayUrl=result.downloadUrl;
-    }else{
-      vidOneDriveUrl=result.shareUrl;
-      vidItemId=result.itemId;
-      vidDisplayUrl=result.downloadUrl;
-    }
+    const result=await uploadFile(file,type==='thumb'?'thumbnails':'videos');
+    if(type==='thumb'){thumbOneDriveUrl=result.shareUrl;thumbItemId=result.itemId;thumbDisplayUrl=result.downloadUrl;}
+    else{vidOneDriveUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;}
     statusEl.textContent='Uploaded ✓';
-    const resultLink=safeUrl(result.shareUrl);
-    linkEl.innerHTML=resultLink?`<a href="${escHtml(resultLink)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
-    const curName=document.getElementById('fName').value||'';
-    setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,curName);
-    showToast('File uploaded to OneDrive','success');
-  }catch(e){
-    statusEl.className='upload-status error';
-    statusEl.textContent='Upload failed: '+e.message;
-    showToast('Upload failed','error');
+    const rl=safeUrl(result.shareUrl);
+    linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,document.getElementById('fName').value||'');
+    showToast(LOCAL_MODE?'File saved locally':'File uploaded to OneDrive','success');
+  }catch(e){statusEl.className='upload-status error';statusEl.textContent='Upload failed: '+e.message;showToast('Upload failed','error');}
+  boxEl.classList.remove('uploading');
+}
+
+function renderCarouselImagesGrid(){
+  const grid=document.getElementById('carouselImagesGrid');
+  const count=document.getElementById('carouselImageCount');
+  if(!grid)return;
+  count.textContent=carouselImages.length?`(${carouselImages.length})` :'';
+  grid.innerHTML=carouselImages.map((img,i)=>{
+    const src=escHtml(safeUrl(img.downloadUrl||img.shareUrl)||'');
+    return `<div class="carousel-img-thumb">
+      <img src="${src}" onclick="openLightbox('img',${jsArg(img.downloadUrl||img.shareUrl)},${jsArg('Slide '+(i+1))})" onerror="this.parentElement.style.opacity='0.4'">
+      <span class="ci-num">${i+1}</span>
+      <span class="ci-remove" onclick="removeCarouselImage(${i})" title="Remove">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function removeCarouselImage(idx){
+  carouselImages.splice(idx,1);
+  renderCarouselImagesGrid();
+}
+
+async function handleCarouselImagesUpload(files){
+  const statusEl=document.getElementById('carouselImagesStatus');
+  const boxEl=document.getElementById('carouselAddImgBox');
+  const total=files.length;
+  statusEl.className='upload-status';
+  statusEl.textContent=`Uploading 0/${total}...`;
+  boxEl.classList.add('uploading');
+  let done=0;
+  for(const file of files){
+    try{
+      const result=await uploadFile(file,'thumbnails');
+      carouselImages.push({shareUrl:result.shareUrl,itemId:result.itemId,downloadUrl:result.downloadUrl});
+      done++;
+      statusEl.textContent=done<total?`Uploading ${done}/${total}...`:`${done} image${done>1?'s':''} uploaded ✓`;
+      renderCarouselImagesGrid();
+    }catch(e){
+      statusEl.className='upload-status error';
+      statusEl.textContent=`Failed on "${file.name}": ${e.message}`;
+    }
   }
   boxEl.classList.remove('uploading');
 }
 
-document.getElementById('thumbFile').addEventListener('change',function(){
-  if(this.files[0])handleUpload(this.files[0],'thumb');
+// ========== LIGHTBOX ==========
+function openLightbox(type,url,name){
+  const content=document.getElementById('lightboxContent');
+  const label=document.getElementById('lightboxLabel');
+  const safeU=escHtml(safeUrl(url));
+  if(type==='img'){content.innerHTML=`<img class="lightbox-img" src="${safeU}" alt="${escHtml(name)}">`;}
+  else{content.innerHTML=`<video class="lightbox-video" src="${safeU}" controls autoplay></video>`;}
+  label.textContent=name;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.getElementById('lightboxContent').innerHTML='';}
+
+// ========== UNDO DELETE ==========
+function showToastUndo(msg){
+  const t=document.getElementById('toast');t.innerHTML='';
+  const span=document.createElement('span');span.textContent=msg;
+  const btn=document.createElement('button');btn.textContent='Undo';
+  btn.style.cssText='margin-left:12px;background:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px;font-size:12px;color:inherit;cursor:pointer;font-family:inherit';
+  btn.addEventListener('click',()=>{
+    if(pendingDelete){clearTimeout(pendingDelete.timer);cards.splice(pendingDelete.index,0,pendingDelete.card);pendingDelete=null;renderAll();t.classList.remove('show');}
+  });
+  const bar=document.createElement('div');bar.className='toast-bar';
+  t.appendChild(span);t.appendChild(btn);t.appendChild(bar);
+  t.className='toast show';
+  setTimeout(()=>{if(!pendingDelete)t.classList.remove('show');},5000);
+}
+
+// ========== REPORTS ==========
+let reportPeriod = 'all';
+
+function getReportRange() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  if (reportPeriod === 'today') { const t = fmt(now); return {from:t, to:t}; }
+  if (reportPeriod === 'week') {
+    const day = now.getDay(); // 0=Sun
+    const mon = new Date(now); mon.setDate(now.getDate() - ((day + 6) % 7));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return {from:fmt(mon), to:fmt(sun)};
+  }
+  if (reportPeriod === 'month') {
+    const from = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+    const to = fmt(new Date(now.getFullYear(), now.getMonth()+1, 0));
+    return {from, to};
+  }
+  if (reportPeriod === 'custom') {
+    return {from: document.getElementById('reportFromDate').value||'', to: document.getElementById('reportToDate').value||''};
+  }
+  return {from:'', to:''};
+}
+
+function filterCardsByPeriod(from, to) {
+  if (!from && !to) return cards;
+  return cards.filter(c => {
+    if (!c.postDate) return false;
+    if (from && c.postDate < from) return false;
+    if (to && c.postDate > to) return false;
+    return true;
+  });
+}
+
+function barColor(label) {
+  const map = {High:'#f87171',Medium:'#e8a83b',Low:'#5ae8a0',Approved:'#5ae8a0',Pending:'#e8a83b',Rejected:'#f87171',Short:'#7ab8e8',Long:'#e8a07a',Overdue:'#f87171','Due soon':'#e8a83b','On-time':'#5ae8a0'};
+  return map[label] || '#3b82f6';
+}
+
+function renderBars(items, max) {
+  if (!items.length) return '<div class="widget-empty">No data</div>';
+  return items.map(({label, count}) => {
+    const pct = max > 0 ? Math.round(count/max*100) : 0;
+    return `<div class="rbar-row">
+      <span class="rbar-label" title="${escHtml(label)}">${escHtml(label)}</span>
+      <div class="rbar-track"><div class="rbar-fill" style="width:${pct}%;background:${barColor(label)}"></div></div>
+      <span class="rbar-count">${count}</span>
+      <span class="rbar-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+}
+
+function computeReport() {
+  const {from, to} = getReportRange();
+  const scopeCards = filterCardsByPeriod(from, to);
+  const all = cards;
+  const total = scopeCards.length;
+  const grouped = (arr, key, labels) => {
+    const vals = labels || [...new Set(arr.map(c=>c[key]).filter(Boolean))];
+    return vals.map(v=>({label:v, count:arr.filter(c=>c[key]===v).length})).filter(x=>x.count>0).sort((a,b)=>b.count-a.count);
+  };
+  const byStage    = STAGES.map((s,i)=>({label:s, count:scopeCards.filter(c=>c.stage===i).length}));
+  const byFormat   = grouped(scopeCards,'format',['Short','Long']);
+  const byCategory = grouped(scopeCards,'category');
+  const byPresenter= grouped(scopeCards,'presenter');
+  const byAssign   = grouped(scopeCards,'assign');
+  const byEditor   = grouped(scopeCards,'editor');
+  const byPriority = grouped(scopeCards,'priority',['High','Medium','Low']);
+  const byCompliance=grouped(scopeCards,'compliance',['Approved','Pending','Rejected']);
+  const active = scopeCards.filter(c=>c.stage<4);
+  const dueItems = [
+    {label:'Overdue',  count: active.filter(c=>dueDateStatus(c.dueDate,c.stage)==='overdue').length},
+    {label:'Due soon', count: active.filter(c=>dueDateStatus(c.dueDate,c.stage)==='soon').length},
+    {label:'On-time',  count: active.filter(c=>c.dueDate&&dueDateStatus(c.dueDate,c.stage)===null).length},
+  ].filter(x=>x.count>0);
+  const withThumb = scopeCards.filter(c=>c.thumbUrl).length;
+  const withVid   = boardMode==='carousels'
+    ? scopeCards.filter(c=>Array.isArray(c.images)&&c.images.length>0).length
+    : scopeCards.filter(c=>c.vidUrl).length;
+  const withVidLabel = boardMode==='carousels' ? 'Has Images' : 'Has Video';
+  return {total, from, to, scopeCards, byStage, byFormat, byCategory, byPresenter, byAssign, byEditor, byPriority, byCompliance, dueItems, withThumb, withVid, withVidLabel};
+}
+
+function renderReport() {
+  const r = computeReport();
+  const {from, to} = getReportRange();
+  const periodLabel = reportPeriod === 'all' ? 'All time' :
+    reportPeriod === 'today' ? 'Today' :
+    reportPeriod === 'week'  ? 'This week' :
+    reportPeriod === 'month' ? 'This month' :
+    (from||'?') + ' → ' + (to||'?');
+  const maxStage = Math.max(...r.byStage.map(x=>x.count), 1);
+  const maxCat   = Math.max(...r.byCategory.map(x=>x.count), 1);
+  const maxPres  = Math.max(...r.byPresenter.map(x=>x.count), 1);
+  const maxAssign= Math.max(...r.byAssign.map(x=>x.count), 1);
+  const maxEditor= Math.max(...r.byEditor.map(x=>x.count), 1);
+  const maxPri   = Math.max(...r.byPriority.map(x=>x.count), 1);
+  const maxComp  = Math.max(...r.byCompliance.map(x=>x.count), 1);
+  const maxDue   = Math.max(...r.dueItems.map(x=>x.count), 1);
+
+  document.getElementById('reportsBody').innerHTML = `
+    <div class="report-period-note">Period: <strong style="color:var(--text)">${escHtml(periodLabel)}</strong> &nbsp;·&nbsp; ${r.total} video${r.total!==1?'s':''} in scope</div>
+
+    <div class="report-section-title">Overview</div>
+    <div class="report-summary-grid">
+      <div class="summary-card"><div class="summary-num">${r.total}</div><div class="summary-sub">Total</div></div>
+      ${r.byStage.map(s=>`<div class="summary-card"><div class="summary-num">${s.count}</div><div class="summary-sub">${escHtml(s.label)}</div></div>`).join('')}
+      <div class="summary-card"><div class="summary-num">${r.withThumb}</div><div class="summary-sub">${boardMode==='carousels'?'Has Cover':'Has Thumb'}</div></div>
+      <div class="summary-card"><div class="summary-num">${r.withVid}</div><div class="summary-sub">${r.withVidLabel}</div></div>
+    </div>
+
+    <div class="report-section-title">Breakdown</div>
+    <div class="report-grid">
+      <div class="report-widget"><div class="widget-title">By Stage</div>${renderBars(r.byStage, maxStage)}</div>
+      <div class="report-widget"><div class="widget-title">By Format</div>${renderBars(r.byFormat, r.total||1)}</div>
+      <div class="report-widget"><div class="widget-title">Due Status</div>${renderBars(r.dueItems, maxDue)}</div>
+      <div class="report-widget"><div class="widget-title">By Category</div>${renderBars(r.byCategory, maxCat)}</div>
+      <div class="report-widget"><div class="widget-title">By Priority</div>${renderBars(r.byPriority, maxPri)}</div>
+      <div class="report-widget"><div class="widget-title">By Compliance</div>${renderBars(r.byCompliance, maxComp)}</div>
+      <div class="report-widget"><div class="widget-title">By Presenter</div>${renderBars(r.byPresenter, maxPres)}</div>
+      <div class="report-widget"><div class="widget-title">By Assigned</div>${renderBars(r.byAssign, maxAssign)}</div>
+      <div class="report-widget"><div class="widget-title">By Editor</div>${renderBars(r.byEditor, maxEditor)}</div>
+    </div>`;
+}
+
+function openReports() {
+  document.getElementById('reportsOverlay').classList.add('open');
+  renderReport();
+}
+function closeReports() { document.getElementById('reportsOverlay').classList.remove('open'); }
+
+function exportCSV() {
+  const r = computeReport();
+  const headers = ['Name','Format','Category','Stage','Presenter','Assigned','Editor','Priority','Post Date','Due Date','Channel','Segment','Compliance','Approved By','Has Thumbnail',boardMode==='carousels'?'Has Images':'Has Video','Script'];
+  const rows = r.scopeCards.map(c => [
+    c.name, c.format, c.category, STAGES[c.stage]||'',
+    c.presenter, c.assign, c.editor, c.priority,
+    c.postDate, c.dueDate, c.channel, c.segment,
+    c.compliance, c.approve,
+    c.thumbUrl ? 'Yes' : 'No',
+    boardMode==='carousels' ? (Array.isArray(c.images)&&c.images.length?'Yes':'No') : (c.vidUrl?'Yes':'No'),
+    c.script
+  ].map(v => `"${String(v||'').replace(/"/g,'""')}"`));
+  const csv = [headers.map(h=>`"${h}"`), ...rows].map(r=>r.join(',')).join('\n');
+  const url = URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));
+  const a = document.createElement('a'); a.href=url; a.download='socieva-report.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ========== EVENT LISTENERS ==========
+document.getElementById('loginSubmitBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUsername').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginPassword').focus(); });
+
+document.getElementById('changePwSubmitBtn').addEventListener('click', doChangePassword);
+document.getElementById('changePwConfirm').addEventListener('keydown', e=>{ if(e.key==='Enter') doChangePassword(); });
+
+document.getElementById('msConnectBtn').addEventListener('click', async()=>{
+  if(!msalApp){document.getElementById('msConnectError').textContent='MSAL not available';return;}
+  document.getElementById('msConnectError').textContent='';
+  try{
+    await msalApp.loginPopup({scopes:SCOPES});
+    location.reload();
+  }catch(e){document.getElementById('msConnectError').textContent='Connection failed: '+e.message;}
 });
-document.getElementById('vidFile').addEventListener('change',function(){
-  if(this.files[0])handleUpload(this.files[0],'vid');
+
+document.getElementById('localModeBtn').addEventListener('click', ()=>{
+  localStorage.setItem(LOCAL_MODE_KEY, '1');
+  location.reload();
 });
+
+if(LOCAL_MODE){
+  const badge = document.getElementById('exitLocalModeBtn');
+  badge.style.display = 'inline-block';
+  badge.addEventListener('click', ()=>{
+    localStorage.removeItem(LOCAL_MODE_KEY);
+    location.reload();
+  });
+}
+
+document.getElementById('userAvatar').addEventListener('click', doLogout);
+
+document.getElementById('thumbFile').addEventListener('change',function(){if(this.files[0])handleUpload(this.files[0],'thumb');});
+document.getElementById('vidFile').addEventListener('change',function(){if(this.files[0])handleUpload(this.files[0],'vid');});
+document.getElementById('carouselImagesFile').addEventListener('change',function(){if(this.files.length)handleCarouselImagesUpload(Array.from(this.files));this.value='';});
 
 document.getElementById('saveBtn').addEventListener('click',async()=>{
   const name=document.getElementById('fName').value.trim();
-  if(!name){document.getElementById('fName').focus();return;}
+  if(!name){document.getElementById('fName').focus();document.getElementById('fNameError').textContent='Required';return;}
+  const existingCard=editId?cards.find(c=>c.id===editId):null;
   const card={
-    id:editId||uid(),
-    name,
+    id:editId||uid(),name,
+    createdAt:existingCard?.createdAt||new Date().toISOString(),
     format:document.getElementById('fFormat').value,
     category:document.getElementById('fCategory').value,
     presenter:document.getElementById('fPresenter').value,
@@ -1302,74 +2119,34 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     compliance:document.getElementById('fCompliance').value,
     approve:document.getElementById('fApprove').value,
     stage:parseInt(document.getElementById('fStage').value),
-    thumbUrl:thumbOneDriveUrl,
-    vidUrl:vidOneDriveUrl,
-    thumbItemId:thumbItemId,
-    vidItemId:vidItemId,
-    thumbDisplayUrl:thumbDisplayUrl,
-    vidDisplayUrl:vidDisplayUrl
+    slidesCount:boardMode==='carousels'?(parseInt(document.getElementById('fSlidesCount').value)||null):undefined,
+    thumbUrl: boardMode==='carousels' ? (carouselImages[0]?.shareUrl||null) : thumbOneDriveUrl,
+    thumbItemId: boardMode==='carousels' ? (carouselImages[0]?.itemId||null) : thumbItemId,
+    thumbDisplayUrl: boardMode==='carousels' ? (carouselImages[0]?.downloadUrl||null) : thumbDisplayUrl,
+    vidUrl: boardMode==='carousels' ? undefined : vidOneDriveUrl,
+    vidItemId: boardMode==='carousels' ? undefined : vidItemId,
+    vidDisplayUrl: boardMode==='carousels' ? undefined : vidDisplayUrl,
+    images: boardMode==='carousels' ? carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})) : undefined
   };
   const btn=document.getElementById('saveBtn');
   btn.textContent='Saving...';btn.disabled=true;
   try{
-    if(editId){const idx=cards.findIndex(c=>c.id===editId);cards[idx]=card;}
-    else{cards.push(card);}
-    await saveData();
-    closeModal();renderAll();
-    showToast('Video saved','success');
-  }catch(e){
-    showToast('Save failed: '+e.message,'error');
-  }
-  btn.textContent='Save video';btn.disabled=false;
+    if(editId){const idx=cards.findIndex(c=>c.id===editId);cards[idx]=card;}else{cards.push(card);}
+    await saveData();closeModal();renderAll();showToast(boardMode==='carousels'?'Carousel saved':'Video saved','success');
+  }catch(e){showToast('Save failed: '+e.message,'error');}
+  btn.textContent='Save';btn.disabled=false;
 });
 
 document.getElementById('deleteBtn').addEventListener('click',async()=>{
   if(!editId)return;
-  const cardToDelete=cards.find(c=>c.id===editId);
-  if(!cardToDelete)return;
+  const cardToDelete=cards.find(c=>c.id===editId);if(!cardToDelete)return;
   const originalIndex=cards.indexOf(cardToDelete);
-  // لو في حذف pending، احفظه فوراً قبل ما نبدأ حذف جديد
-  if(pendingDelete){
-    clearTimeout(pendingDelete.timer);
-    pendingDelete=null;
-    try{await saveData();}catch(e){}
-  }
+  if(pendingDelete){clearTimeout(pendingDelete.timer);pendingDelete=null;try{await saveData();}catch(e){}}
   cards=cards.filter(c=>c.id!==editId);
   closeModal();renderAll();
-  pendingDelete={
-    card:cardToDelete,
-    index:originalIndex,
-    timer:setTimeout(async()=>{
-      pendingDelete=null;
-      try{await saveData();}catch(e){showToast('Delete failed: '+e.message,'error');}
-    },5000)
-  };
+  pendingDelete={card:cardToDelete,index:originalIndex,timer:setTimeout(async()=>{pendingDelete=null;try{await saveData();}catch(e){showToast('Delete failed: '+e.message,'error');}},5000)};
   showToastUndo('"'+cardToDelete.name+'" deleted');
 });
-
-function showToastUndo(msg){
-  const t=document.getElementById('toast');
-  t.innerHTML='';
-  const span=document.createElement('span');
-  span.textContent=msg;
-  const btn=document.createElement('button');
-  btn.textContent='Undo';
-  btn.style.cssText='margin-left:12px;background:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px;font-size:12px;color:inherit;cursor:pointer;font-family:inherit';
-  btn.addEventListener('click',()=>{
-    if(pendingDelete){
-      clearTimeout(pendingDelete.timer);
-      cards.splice(pendingDelete.index,0,pendingDelete.card);
-      pendingDelete=null;
-      renderAll();
-      t.classList.remove('show');
-    }
-  });
-  const bar=document.createElement('div');
-  bar.className='toast-bar';
-  t.appendChild(span);t.appendChild(btn);t.appendChild(bar);
-  t.className='toast show';
-  setTimeout(()=>{if(!pendingDelete)t.classList.remove('show');},5000);
-}
 
 document.getElementById('closeModalBtn').addEventListener('click',closeModal);
 document.getElementById('cancelBtn').addEventListener('click',closeModal);
@@ -1380,47 +2157,96 @@ document.getElementById('cancelSettingsBtn').addEventListener('click',closeSetti
 document.getElementById('addPersonBtn').addEventListener('click',addSettingsPerson);
 document.getElementById('addCategoryBtn').addEventListener('click',addSettingsCategory);
 document.getElementById('saveSettingsBtn').addEventListener('click',saveSettings);
+document.getElementById('addUserBtn').addEventListener('click',addUser);
 document.getElementById('newPersonName').addEventListener('keydown',e=>{if(e.key==='Enter')addSettingsPerson();});
 document.getElementById('newCategoryName').addEventListener('keydown',e=>{if(e.key==='Enter')addSettingsCategory();});
-document.getElementById('settingsBg').addEventListener('click',function(e){
-  if(e.target===this)closeSettings();
+document.getElementById('newUserNameInput').addEventListener('keydown',e=>{if(e.key==='Enter')addUser();});
+document.getElementById('settingsBg').addEventListener('click',function(e){if(e.target===this)closeSettings();});
+document.getElementById('searchInput').addEventListener('input',e=>{activeFilters.q=e.target.value.toLowerCase();updateFilterBadge();renderAll();});
+document.getElementById('filterToggleBtn').addEventListener('click',toggleFilterPanel);
+document.getElementById('sortDirBtn').addEventListener('click',()=>{
+  sortDir=sortDir==='asc'?'desc':'asc';
+  document.getElementById('sortDirBtn').textContent=sortDir==='asc'?'↑':'↓';
+  renderAll();
 });
-document.getElementById('searchInput').addEventListener('input',renderAll);
-document.getElementById('filterCat').addEventListener('change',renderAll);
-document.getElementById('filterPresenter').addEventListener('change',renderAll);
-document.getElementById('filterAssign').addEventListener('change',renderAll);
-document.getElementById('modalBg').addEventListener('keydown',e=>{
-  if((e.ctrlKey||e.metaKey)&&e.key==='Enter')document.getElementById('saveBtn').click();
+document.getElementById('sortBySelect').addEventListener('change',e=>{sortBy=e.target.value;renderAll();});
+
+// Stage pills
+document.querySelectorAll('#fpStageGroup .fp-pill').forEach(p=>{
+  p.addEventListener('click',()=>{
+    activeFilters.stage=p.dataset.val;
+    document.querySelectorAll('#fpStageGroup .fp-pill').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    updateFilterBadge();renderAll();
+  });
+});
+// Format pills
+document.querySelectorAll('#fpFormatGroup .fp-pill').forEach(p=>{
+  p.addEventListener('click',()=>{
+    activeFilters.format=p.dataset.val;
+    document.querySelectorAll('#fpFormatGroup .fp-pill').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    updateFilterBadge();renderAll();
+  });
+});
+// Panel selects
+[['fpCategory','category'],['fpPriority','priority'],['fpCompliance','compliance'],
+ ['fpPresenter','presenter'],['fpAssign','assign'],['fpEditor','editor']].forEach(([id,key])=>{
+  document.getElementById(id).addEventListener('change',e=>{
+    activeFilters[key]=e.target.value;
+    e.target.classList.toggle('active',!!e.target.value);
+    updateFilterBadge();renderAll();
+  });
+});
+// Date inputs
+[['fpPostFrom','postDateFrom'],['fpPostTo','postDateTo'],
+ ['fpDueFrom','dueDateFrom'],['fpDueTo','dueDateTo']].forEach(([id,key])=>{
+  document.getElementById(id).addEventListener('change',e=>{
+    activeFilters[key]=e.target.value;
+    e.target.classList.toggle('active',!!e.target.value);
+    updateFilterBadge();renderAll();
+  });
+});
+// Text inputs
+document.getElementById('fpChannel').addEventListener('input',e=>{activeFilters.channel=e.target.value;e.target.classList.toggle('active',!!e.target.value);updateFilterBadge();renderAll();});
+document.getElementById('fpSegment').addEventListener('input',e=>{activeFilters.segment=e.target.value;e.target.classList.toggle('active',!!e.target.value);updateFilterBadge();renderAll();});
+// Checkboxes
+[['fpHasThumb','hasThumb','fpHasThumbLabel'],['fpHasVid','hasVid','fpHasVidLabel'],
+ ['fpOverdue','overdue','fpOverdueLabel'],['fpDueSoon','dueSoon','fpDueSoonLabel']].forEach(([cbId,key,lblId])=>{
+  document.getElementById(cbId).addEventListener('change',e=>{
+    activeFilters[key]=e.target.checked;
+    document.getElementById(lblId).classList.toggle('active',e.target.checked);
+    updateFilterBadge();renderAll();
+  });
+});
+document.getElementById('fpClearBtn').addEventListener('click',clearAllFilters);
+document.getElementById('modalBg').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')document.getElementById('saveBtn').click();});
+// Reports
+// Board tabs
+document.querySelectorAll('.board-tab').forEach(btn=>{
+  btn.addEventListener('click',()=>switchBoardMode(btn.dataset.mode));
 });
 
-function openLightbox(type,url,name){
-  const content=document.getElementById('lightboxContent');
-  const label=document.getElementById('lightboxLabel');
-  const safeU=escHtml(safeUrl(url));
-  if(type==='img'){
-    content.innerHTML=`<img class="lightbox-img" src="${safeU}" alt="${escHtml(name)}">`;
-  }else{
-    content.innerHTML=`<video class="lightbox-video" src="${safeU}" controls autoplay></video>`;
-  }
-  label.textContent=name;
-  document.getElementById('lightbox').classList.add('open');
-}
-
-function closeLightbox(){
-  const lb=document.getElementById('lightbox');
-  lb.classList.remove('open');
-  document.getElementById('lightboxContent').innerHTML='';
-}
+document.getElementById('openReportsBtn').addEventListener('click', openReports);
+document.getElementById('closeReportsBtn').addEventListener('click', closeReports);
+document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
+document.getElementById('printReportBtn').addEventListener('click', () => window.print());
+document.querySelectorAll('.period-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    reportPeriod = btn.dataset.period;
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('reportCustomDates').style.display = reportPeriod === 'custom' ? 'flex' : 'none';
+    renderReport();
+  });
+});
+document.getElementById('reportFromDate').addEventListener('change', renderReport);
+document.getElementById('reportToDate').addEventListener('change', renderReport);
 
 document.getElementById('lightboxClose').addEventListener('click',closeLightbox);
-document.getElementById('lightbox').addEventListener('click',function(e){
-  if(e.target===this)closeLightbox();
-});
+document.getElementById('lightbox').addEventListener('click',function(e){if(e.target===this)closeLightbox();});
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){
-    closeLightbox();
-    if(document.getElementById('settingsBg').classList.contains('open'))closeSettings();
-  }
+  if(e.key==='Escape'){closeLightbox();if(document.getElementById('settingsBg').classList.contains('open'))closeSettings();}
 });
 
 init().catch(e=>console.error(e));
