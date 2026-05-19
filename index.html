@@ -1922,8 +1922,8 @@ function getReportRange() {
 function filterCardsByPeriod(from, to) {
   if (!from && !to) return cards;
   return cards.filter(c => {
-    // Use postDate first; fall back to dueDate so cards without a postDate still appear
-    const d = c.postDate || c.dueDate;
+    // Priority: postDate → dueDate → createdAt (date only)
+    const d = c.postDate || c.dueDate || (c.createdAt ? c.createdAt.slice(0,10) : '');
     if (!d) return false;
     if (from && d < from) return false;
     if (to   && d > to)   return false;
