@@ -341,13 +341,6 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       Connect Service Account
     </button>
     <div class="auth-error" id="msConnectError" style="margin-top:10px"></div>
-    <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Testing without OneDrive?</div>
-      <button class="btn-auth" id="localModeBtn" style="background:var(--bg3);border:1px solid var(--border)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-        Test Locally (no OneDrive)
-      </button>
-    </div>
   </div>
 </div>
 
@@ -416,8 +409,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       <button class="btn btn-primary" id="openAddBtn">+ New</button>
       <button class="btn" id="openSettingsBtn" style="display:none">Settings</button>
       <span id="syncDot" style="width:6px;height:6px;border-radius:50%;background:var(--border2);display:inline-block;flex-shrink:0;transition:background 0.4s" title="Sync status"></span>
-      <button id="exitLocalModeBtn" title="Exit test mode and return to OneDrive" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:#7c3aed22;color:#a78bfa;border:1px solid #7c3aed55;cursor:pointer">⚠ Test Mode</button>
-      <div class="user-avatar" id="userAvatar" title="Sign out">?</div>
+<div class="user-avatar" id="userAvatar" title="Sign out">?</div>
     </div>
   </div>
 
@@ -2076,19 +2068,6 @@ document.getElementById('msConnectBtn').addEventListener('click', async()=>{
   }catch(e){document.getElementById('msConnectError').textContent='Connection failed: '+e.message;}
 });
 
-document.getElementById('localModeBtn').addEventListener('click', ()=>{
-  localStorage.setItem(LOCAL_MODE_KEY, '1');
-  location.reload();
-});
-
-if(LOCAL_MODE){
-  const badge = document.getElementById('exitLocalModeBtn');
-  badge.style.display = 'inline-block';
-  badge.addEventListener('click', ()=>{
-    localStorage.removeItem(LOCAL_MODE_KEY);
-    location.reload();
-  });
-}
 
 document.getElementById('userAvatar').addEventListener('click', doLogout);
 
