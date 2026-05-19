@@ -1919,10 +1919,17 @@ function getReportRange() {
   return {from:'', to:''};
 }
 
+function localDateStr(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
 function filterCardsByPeriod(from, to) {
   if (!from && !to) return cards;
   return cards.filter(c => {
-    const created = c.createdAt ? c.createdAt.slice(0,10) : '';
+    const created = localDateStr(c.createdAt);
     if (!created) return false;
     if (from && created < from) return false;
     if (to   && created > to)   return false;
