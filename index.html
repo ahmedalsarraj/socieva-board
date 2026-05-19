@@ -1950,13 +1950,12 @@ function renderBars(items, max) {
 function computeReport() {
   const {from, to} = getReportRange();
   const scopeCards = filterCardsByPeriod(from, to);
-  const all = cards;
   const total = scopeCards.length;
   const grouped = (arr, key, labels) => {
     const vals = labels || [...new Set(arr.map(c=>c[key]).filter(Boolean))];
     return vals.map(v=>({label:v, count:arr.filter(c=>c[key]===v).length})).filter(x=>x.count>0).sort((a,b)=>b.count-a.count);
   };
-  const byStage    = STAGES.map((s,i)=>({label:s, count:scopeCards.filter(c=>c.stage===i).length}));
+  const byStage    = STAGES.map((s,i)=>({label:s, count:scopeCards.filter(c=>c.stage===i).length})).filter(x=>x.count>0);
   const byFormat   = grouped(scopeCards,'format',['Short','Long']);
   const byCategory = grouped(scopeCards,'category');
   const byPresenter= grouped(scopeCards,'presenter');
@@ -1986,14 +1985,7 @@ function renderReport() {
     reportPeriod === 'week'  ? 'This week' :
     reportPeriod === 'month' ? 'This month' :
     (from||'?') + ' → ' + (to||'?');
-  const maxStage = Math.max(...r.byStage.map(x=>x.count), 1);
-  const maxCat   = Math.max(...r.byCategory.map(x=>x.count), 1);
-  const maxPres  = Math.max(...r.byPresenter.map(x=>x.count), 1);
-  const maxAssign= Math.max(...r.byAssign.map(x=>x.count), 1);
-  const maxEditor= Math.max(...r.byEditor.map(x=>x.count), 1);
-  const maxPri   = Math.max(...r.byPriority.map(x=>x.count), 1);
-  const maxComp  = Math.max(...r.byCompliance.map(x=>x.count), 1);
-  const maxDue   = Math.max(...r.dueItems.map(x=>x.count), 1);
+  const tot = r.total || 1;
 
   document.getElementById('reportsBody').innerHTML = `
     <div class="report-period-note">Period: <strong style="color:var(--text)">${escHtml(periodLabel)}</strong> &nbsp;·&nbsp; ${r.total} video${r.total!==1?'s':''} in scope</div>
@@ -2001,22 +1993,22 @@ function renderReport() {
     <div class="report-section-title">Overview</div>
     <div class="report-summary-grid">
       <div class="summary-card"><div class="summary-num">${r.total}</div><div class="summary-sub">Total</div></div>
-      ${r.byStage.map(s=>`<div class="summary-card"><div class="summary-num">${s.count}</div><div class="summary-sub">${escHtml(s.label)}</div></div>`).join('')}
+      ${r.byStage.filter(s=>s.count>0).map(s=>`<div class="summary-card"><div class="summary-num">${s.count}</div><div class="summary-sub">${escHtml(s.label)}</div></div>`).join('')}
       <div class="summary-card"><div class="summary-num">${r.withThumb}</div><div class="summary-sub">${boardMode==='carousels'?'Has Cover':'Has Thumb'}</div></div>
       <div class="summary-card"><div class="summary-num">${r.withVid}</div><div class="summary-sub">${r.withVidLabel}</div></div>
     </div>
 
     <div class="report-section-title">Breakdown</div>
     <div class="report-grid">
-      <div class="report-widget"><div class="widget-title">By Stage</div>${renderBars(r.byStage, maxStage)}</div>
-      <div class="report-widget"><div class="widget-title">By Format</div>${renderBars(r.byFormat, r.total||1)}</div>
-      <div class="report-widget"><div class="widget-title">Due Status</div>${renderBars(r.dueItems, maxDue)}</div>
-      <div class="report-widget"><div class="widget-title">By Category</div>${renderBars(r.byCategory, maxCat)}</div>
-      <div class="report-widget"><div class="widget-title">By Priority</div>${renderBars(r.byPriority, maxPri)}</div>
-      <div class="report-widget"><div class="widget-title">By Compliance</div>${renderBars(r.byCompliance, maxComp)}</div>
-      <div class="report-widget"><div class="widget-title">By Presenter</div>${renderBars(r.byPresenter, maxPres)}</div>
-      <div class="report-widget"><div class="widget-title">By Assigned</div>${renderBars(r.byAssign, maxAssign)}</div>
-      <div class="report-widget"><div class="widget-title">By Editor</div>${renderBars(r.byEditor, maxEditor)}</div>
+      <div class="report-widget"><div class="widget-title">By Stage</div>${renderBars(r.byStage, tot)}</div>
+      <div class="report-widget"><div class="widget-title">By Format</div>${renderBars(r.byFormat, tot)}</div>
+      <div class="report-widget"><div class="widget-title">Due Status</div>${renderBars(r.dueItems, tot)}</div>
+      <div class="report-widget"><div class="widget-title">By Category</div>${renderBars(r.byCategory, tot)}</div>
+      <div class="report-widget"><div class="widget-title">By Priority</div>${renderBars(r.byPriority, tot)}</div>
+      <div class="report-widget"><div class="widget-title">By Compliance</div>${renderBars(r.byCompliance, tot)}</div>
+      <div class="report-widget"><div class="widget-title">By Presenter</div>${renderBars(r.byPresenter, tot)}</div>
+      <div class="report-widget"><div class="widget-title">By Assigned</div>${renderBars(r.byAssign, tot)}</div>
+      <div class="report-widget"><div class="widget-title">By Editor</div>${renderBars(r.byEditor, tot)}</div>
     </div>`;
 }
 
@@ -2028,7 +2020,7 @@ function closeReports() { document.getElementById('reportsOverlay').classList.re
 
 function exportCSV() {
   const r = computeReport();
-  const headers = ['Name','Format','Category','Stage','Presenter','Assigned','Editor','Priority','Post Date','Due Date','Channel','Segment','Compliance','Approved By','Has Thumbnail',boardMode==='carousels'?'Has Images':'Has Video','Script'];
+  const headers = ['Name','Format','Category','Stage','Presenter','Assigned','Editor','Priority','Post Date','Due Date','Channel','Segment','Compliance','Approved By','Has Thumbnail',boardMode==='carousels'?'Has Images':'Has Video','Has Script','SEO Title','SEO Description','Notes'];
   const rows = r.scopeCards.map(c => [
     c.name, c.format, c.category, STAGES[c.stage]||'',
     c.presenter, c.assign, c.editor, c.priority,
@@ -2036,7 +2028,10 @@ function exportCSV() {
     c.compliance, c.approve,
     c.thumbUrl ? 'Yes' : 'No',
     boardMode==='carousels' ? (Array.isArray(c.images)&&c.images.length?'Yes':'No') : (c.vidUrl?'Yes':'No'),
-    c.script
+    (c.script&&c.script.trim()) ? 'Yes' : 'No',
+    c.seoTitle,
+    c.seoDesc,
+    c.notes
   ].map(v => `"${String(v||'').replace(/"/g,'""')}"`));
   const csv = [headers.map(h=>`"${h}"`), ...rows].map(r=>r.join(',')).join('\n');
   const url = URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));
