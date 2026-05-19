@@ -249,6 +249,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
 .field select option{background:var(--bg3)}
 .field textarea{resize:vertical;min-height:70px;line-height:1.5}
+.field textarea.auto-expand{resize:none;overflow:hidden;min-height:70px}
 .settings-help{font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:12px}
 .settings-list{display:flex;flex-direction:column;gap:8px}
 .settings-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px}
@@ -549,10 +550,13 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
       <input type="text" id="fSegment" placeholder="e.g. History, Morning Market..."></div>
 
     <div class="section-title">Content</div>
-    <div class="field"><label>Script link (Google Docs)</label>
-      <input type="text" id="fScript" placeholder="https://docs.google.com/..."></div>
-    <div class="field" style="margin-top:12px"><label>SEO / hashtags</label>
-      <input type="text" id="fSeo" placeholder="Keywords, hashtags..."></div>
+    <div class="field"><label>Script</label>
+      <textarea id="fScript" class="auto-expand" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" placeholder="Paste script here..."></textarea></div>
+    <div class="section-title" style="margin-top:16px">SEO</div>
+    <div class="field"><label>SEO Title</label>
+      <input type="text" id="fSeoTitle" placeholder="SEO title..."></div>
+    <div class="field" style="margin-top:12px"><label>SEO Description</label>
+      <textarea id="fSeoDesc" class="auto-expand" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" placeholder="SEO description..."></textarea></div>
     <div class="field" style="margin-top:12px"><label>Notes</label>
       <textarea id="fNotes" placeholder="Hook idea, shoot notes, references..."></textarea></div>
 
@@ -1459,7 +1463,7 @@ function avatarColor(name){
 function getFiltered(){
   const f=activeFilters;
   return cards.filter(c=>{
-    if(f.q&&![c.name,c.channel,c.segment,c.presenter,c.assign,c.editor,c.seo,c.notes].some(v=>v&&v.toLowerCase().includes(f.q)))return false;
+    if(f.q&&![c.name,c.channel,c.segment,c.presenter,c.assign,c.editor,c.seoTitle,c.seoDesc,c.script,c.notes].some(v=>v&&v.toLowerCase().includes(f.q)))return false;
     if(f.format&&c.format!==f.format)return false;
     if(f.stage!==''&&c.stage!==parseInt(f.stage))return false;
     if(f.category&&c.category!==f.category)return false;
@@ -1577,7 +1581,7 @@ function renderCard(c){
   const av=avatarColor(c.assign||c.presenter);
   const ini=escHtml(initials(c.assign||c.presenter||'?'));
   const catCls=CAT_TAG[c.category]||'tag-gen';
-  const scriptUrl=safeUrl(c.script);
+  const hasScript=!!(c.script&&c.script.trim());
   const thumbSrc=safeUrl(c.thumbDisplayUrl);
   const vidSrc=safeUrl(c.vidDisplayUrl);
   const dueSt=dueDateStatus(c.dueDate,c.stage);
@@ -1628,7 +1632,7 @@ function renderCard(c){
       ${c.channel?`<div class="meta-row"><span class="meta-k">Channel</span><span class="meta-v">${escHtml(c.channel)}</span></div>`:''}
       ${c.postDate?`<div class="meta-row"><span class="meta-k">Post date</span><span class="meta-v">${escHtml(fmtDate(c.postDate))}</span></div>`:''}
       ${c.compliance?`<div class="meta-row"><span class="meta-k">Compliance</span><span class="meta-v ${c.compliance==='Approved'?'green':c.compliance==='Rejected'?'red':'amber'}">${escHtml(c.compliance)}</span></div>`:''}
-      ${scriptUrl?`<div class="meta-row"><span class="meta-k">Script</span><a href="${escHtml(scriptUrl)}" target="_blank" style="font-size:11px;color:#3b82f6;text-decoration:none" onclick="event.stopPropagation()">Open →</a></div>`:''}
+      ${hasScript?`<div class="meta-row"><span class="meta-k">Script</span><span class="meta-v" style="color:#7ab8e8">✓ Added</span></div>`:''}
     </div>
     <hr class="card-hr">
     <div class="card-footer">
@@ -1723,7 +1727,8 @@ function resetModal(){
   thumbItemId=null;vidItemId=null;
   thumbDisplayUrl=null;vidDisplayUrl=null;
   carouselImages=[];
-  ['fName','fChannel','fSegment','fScript','fSeo','fNotes','fPostDate','fDueDate','fSlidesCount'].forEach(id=>document.getElementById(id).value='');
+  ['fName','fChannel','fSegment','fSeoTitle','fNotes','fPostDate','fDueDate','fSlidesCount'].forEach(id=>document.getElementById(id).value='');
+  ['fScript','fSeoDesc'].forEach(id=>{const el=document.getElementById(id);el.value='';el.style.height='auto';});
   document.getElementById('slidesCountField').style.display=isCarousel?'flex':'none';
   document.getElementById('vidUploadField').style.display=isCarousel?'none':'block';
   document.getElementById('thumbUploadField').style.display=isCarousel?'none':'block';
@@ -1766,8 +1771,9 @@ function openEdit(id){
   document.getElementById('fDueDate').value=c.dueDate||'';
   document.getElementById('fChannel').value=c.channel||'';
   document.getElementById('fSegment').value=c.segment||'';
-  document.getElementById('fScript').value=c.script||'';
-  document.getElementById('fSeo').value=c.seo||'';
+  const fScript=document.getElementById('fScript');fScript.value=c.script||'';fScript.style.height='auto';if(c.script)fScript.style.height=fScript.scrollHeight+'px';
+  document.getElementById('fSeoTitle').value=c.seoTitle||'';
+  const fSeoDesc=document.getElementById('fSeoDesc');fSeoDesc.value=c.seoDesc||'';fSeoDesc.style.height='auto';if(c.seoDesc)fSeoDesc.style.height=fSeoDesc.scrollHeight+'px';
   document.getElementById('fNotes').value=c.notes||'';
   document.getElementById('fCompliance').value=c.compliance||'';
   document.getElementById('fApprove').value=c.approve||'';
@@ -2086,7 +2092,8 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     channel:document.getElementById('fChannel').value,
     segment:document.getElementById('fSegment').value,
     script:document.getElementById('fScript').value,
-    seo:document.getElementById('fSeo').value,
+    seoTitle:document.getElementById('fSeoTitle').value,
+    seoDesc:document.getElementById('fSeoDesc').value,
     notes:document.getElementById('fNotes').value,
     compliance:document.getElementById('fCompliance').value,
     approve:document.getElementById('fApprove').value,
