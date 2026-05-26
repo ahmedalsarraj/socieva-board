@@ -420,12 +420,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
     <div class="fp-row">
       <span class="fp-label">Stage</span>
       <div class="fp-pill-group" id="fpStageGroup">
-        <button class="fp-pill active" data-val="">All</button>
-        <button class="fp-pill" data-val="0">Script</button>
-        <button class="fp-pill" data-val="1">Recording</button>
-        <button class="fp-pill" data-val="2">Editing</button>
-        <button class="fp-pill" data-val="3">Ready</button>
-        <button class="fp-pill" data-val="4">Posted</button>
+        <!-- populated dynamically by renderStagePills() -->
       </div>
       <div class="fp-divider"></div>
       <span class="fp-label">Format</span>
@@ -1051,6 +1046,7 @@ async function startBoardApp(session){
   refreshOptionLists();
   updateSettingsAccess();
   updateFilterBadge();
+  renderStagePills();
   renderAll();
   setInterval(async()=>{
     if(!currentSession)return;
@@ -1162,6 +1158,8 @@ async function switchBoardMode(mode){
     setLoading(100);setTimeout(()=>setLoading(0),400);
   }catch(e){showToast('Error loading '+mode+': '+e.message,'error');setLoading(0);}
   refreshOptionLists();
+  renderStagePills();
+  activeFilters.stage=''; // reset stage filter on board switch
   renderAll();
 }
 
@@ -1447,7 +1445,7 @@ function showToast(msg,type=''){
 function setLoading(pct){document.getElementById('loadingBar').style.width=pct+'%'}
 
 function dueDateStatus(dueDate,stage){
-  if(!dueDate||stage===4)return null;
+  if(!dueDate||stage===currentStages().length-1)return null;
   const today=new Date();today.setHours(0,0,0,0);
   const due=new Date(dueDate);due.setHours(0,0,0,0);
   const diff=Math.round((due-today)/(864e5));
@@ -1512,11 +1510,26 @@ function updateFilterBadge(){
   btn.classList.toggle('active',filterPanelOpen);
 }
 
+function renderStagePills(){
+  const grp=document.getElementById('fpStageGroup');
+  const stages=currentStages();
+  grp.innerHTML=`<button class="fp-pill active" data-val="">All</button>`
+    +stages.map((s,i)=>`<button class="fp-pill" data-val="${i}">${s}</button>`).join('');
+  grp.querySelectorAll('.fp-pill').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      activeFilters.stage=btn.dataset.val;
+      document.querySelectorAll('#fpStageGroup .fp-pill').forEach(x=>x.classList.remove('active'));
+      btn.classList.add('active');
+      updateFilterBadge();renderBoard();renderStats();
+    });
+  });
+}
+
 function syncFilterPanelUI(){
   const f=activeFilters;
   // Stage pills
   document.querySelectorAll('#fpStageGroup .fp-pill').forEach(p=>{
-    p.classList.toggle('active',p.dataset.val===f.stage);
+    p.classList.toggle('active',p.dataset.val===String(f.stage)||(!p.dataset.val&&f.stage===''));
   });
   // Format pills
   document.querySelectorAll('#fpFormatGroup .fp-pill').forEach(p=>{
@@ -2038,7 +2051,8 @@ function computeReport() {
   const byEditor   = grouped(scopeCards,'editor');
   const byPriority = grouped(scopeCards,'priority',['High','Medium','Low']);
   const byCompliance=grouped(scopeCards,'compliance',['Approved','Pending','Rejected']);
-  const active = scopeCards.filter(c=>c.stage<4);
+  const postedIdx = currentStages().length-1;
+  const active = scopeCards.filter(c=>c.stage<postedIdx);
   const dueItems = [
     {label:'Overdue',  count: active.filter(c=>dueDateStatus(c.dueDate,c.stage)==='overdue').length},
     {label:'Due soon', count: active.filter(c=>dueDateStatus(c.dueDate,c.stage)==='soon').length},
@@ -2224,15 +2238,7 @@ document.getElementById('sortDirBtn').addEventListener('click',()=>{
 });
 document.getElementById('sortBySelect').addEventListener('change',e=>{sortBy=e.target.value;renderAll();});
 
-// Stage pills
-document.querySelectorAll('#fpStageGroup .fp-pill').forEach(p=>{
-  p.addEventListener('click',()=>{
-    activeFilters.stage=p.dataset.val;
-    document.querySelectorAll('#fpStageGroup .fp-pill').forEach(x=>x.classList.remove('active'));
-    p.classList.add('active');
-    updateFilterBadge();renderAll();
-  });
-});
+// Stage pills built dynamically — see renderStagePills()
 // Format pills
 document.querySelectorAll('#fpFormatGroup .fp-pill').forEach(p=>{
   p.addEventListener('click',()=>{
