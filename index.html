@@ -575,7 +575,8 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <input type="file" id="thumbFile" accept="image/*" style="display:none">
         <div class="upload-status" id="thumbStatus"></div>
         <div class="upload-link" id="thumbLink"></div>
-        <div id="thumbRemove" style="display:none;margin-top:6px">
+        <div id="thumbActions" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn" style="font-size:11px;padding:3px 10px" onclick="downloadUpload('thumb')">⬇ Download</button>
           <button type="button" class="btn btn-danger" style="font-size:11px;padding:3px 10px" onclick="removeUpload('thumb')">✕ Remove file</button>
         </div>
       </div>
@@ -589,7 +590,8 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <input type="file" id="vidFile" accept="video/*" style="display:none">
         <div class="upload-status" id="vidStatus"></div>
         <div class="upload-link" id="vidLink"></div>
-        <div id="vidRemove" style="display:none;margin-top:6px">
+        <div id="vidActions" style="display:none;margin-top:6px;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn" style="font-size:11px;padding:3px 10px" onclick="downloadUpload('vid')">⬇ Download</button>
           <button type="button" class="btn btn-danger" style="font-size:11px;padding:3px 10px" onclick="removeUpload('vid')">✕ Remove file</button>
         </div>
       </div>
@@ -1764,8 +1766,8 @@ function resetModal(){
   ['thumbStatus','vidStatus','thumbLink','vidLink'].forEach(id=>document.getElementById(id).textContent='');
   document.getElementById('thumbLabel').textContent='Upload image';
   document.getElementById('vidLabel').textContent='Upload video';
-  document.getElementById('thumbRemove').style.display='none';
-  document.getElementById('vidRemove').style.display='none';
+  document.getElementById('thumbActions').style.display='none';
+  document.getElementById('vidActions').style.display='none';
   document.getElementById('fNameError').textContent='';
   document.getElementById('fNameLabel').firstChild.textContent=isCarousel?'Carousel name ':'Video name ';
   ['thumbPreview','vidPreview'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.innerHTML='';});
@@ -1815,7 +1817,7 @@ function openEdit(id){
     document.getElementById('thumbLabel').textContent='Change image';
     const tv=safeUrl(c.thumbUrl);
     document.getElementById('thumbLink').innerHTML=tv?`<a href="${escHtml(tv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
-    document.getElementById('thumbRemove').style.display='block';
+    document.getElementById('thumbActions').style.display='flex';
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
   if(c.vidUrl){
@@ -1824,7 +1826,7 @@ function openEdit(id){
     document.getElementById('vidLabel').textContent='Change video';
     const vv=safeUrl(c.vidUrl);
     document.getElementById('vidLink').innerHTML=vv?`<a href="${escHtml(vv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
-    document.getElementById('vidRemove').style.display='block';
+    document.getElementById('vidActions').style.display='flex';
     setPreview('vid',vidDisplayUrl,c.name);
   }
   document.getElementById('modalBg').classList.add('open');
@@ -1852,6 +1854,22 @@ async function handleUpload(file,type){
   boxEl.classList.remove('uploading');
 }
 
+async function downloadUpload(type){
+  const url = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
+  const name = document.getElementById('fName').value || 'file';
+  const ext = type==='thumb' ? '.jpg' : '.mp4';
+  if(!url){showToast('No file to download','error');return;}
+  try{
+    const blob = await(await fetch(url)).blob();
+    const realExt = blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':blob.type.includes('mp4')?'.mp4':blob.type.includes('mov')?'.mov':ext;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name+'-'+(type==='thumb'?'thumbnail':'video')+realExt;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }catch(e){showToast('Download failed: '+e.message,'error');}
+}
+
 async function removeUpload(type){
   const label = type==='thumb' ? 'thumbnail image' : 'video';
   if(!confirm(`Delete the uploaded ${label} from OneDrive? This cannot be undone.`)) return;
@@ -1869,14 +1887,14 @@ async function removeUpload(type){
     document.getElementById('thumbStatus').textContent='';
     document.getElementById('thumbLabel').textContent='Upload image';
     document.getElementById('thumbLink').innerHTML='';
-    document.getElementById('thumbRemove').style.display='none';
+    document.getElementById('thumbActions').style.display='none';
     const p=document.getElementById('thumbPreview');p.style.display='none';p.innerHTML='';
   }else{
     vidOneDriveUrl=null;vidItemId=null;vidDisplayUrl=null;
     document.getElementById('vidStatus').textContent='';
     document.getElementById('vidLabel').textContent='Upload video';
     document.getElementById('vidLink').innerHTML='';
-    document.getElementById('vidRemove').style.display='none';
+    document.getElementById('vidActions').style.display='none';
     const p=document.getElementById('vidPreview');p.style.display='none';p.innerHTML='';
   }
   showToast('File deleted from OneDrive','success');
