@@ -580,6 +580,9 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <input type="file" id="thumbFile" accept="image/*" style="display:none">
         <div class="upload-status" id="thumbStatus"></div>
         <div class="upload-link" id="thumbLink"></div>
+        <div id="thumbRemove" style="display:none;margin-top:6px">
+          <button type="button" class="btn btn-danger" style="font-size:11px;padding:3px 10px" onclick="removeUpload('thumb')">✕ Remove file</button>
+        </div>
       </div>
       <div class="field" id="vidUploadField">
         <label>Final video version</label>
@@ -591,6 +594,9 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <input type="file" id="vidFile" accept="video/*" style="display:none">
         <div class="upload-status" id="vidStatus"></div>
         <div class="upload-link" id="vidLink"></div>
+        <div id="vidRemove" style="display:none;margin-top:6px">
+          <button type="button" class="btn btn-danger" style="font-size:11px;padding:3px 10px" onclick="removeUpload('vid')">✕ Remove file</button>
+        </div>
       </div>
     </div>
 
@@ -613,13 +619,7 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
     <div class="section-title">Stage</div>
     <div class="field">
       <label>Current stage</label>
-      <select id="fStage">
-        <option value="0">Script</option>
-        <option value="1">Recording</option>
-        <option value="2">Under editing</option>
-        <option value="3">Ready to post</option>
-        <option value="4">Posted</option>
-      </select>
+      <select id="fStage"></select>
     </div>
 
   </div>
@@ -733,7 +733,9 @@ let carouselCards = [];
 let carouselLoaded = false;
 
 // ========== CONSTANTS ==========
-const STAGES = ['Script','Recording','Under editing','Ready to post','Posted'];
+const STAGES          = ['Script','Recording','Under editing','Ready to post','Posted'];
+const CAROUSEL_STAGES = ['Download','Script','Working on','Ready to post','Posted'];
+function currentStages(){ return boardMode==='carousels'?CAROUSEL_STAGES:STAGES; }
 const DEFAULT_CATEGORIES = ['Education','Market','Motivation','Challenge','Funny','Branding','Story','Top XXX','General'];
 const ROLE_DEFS = [
   {key:'presenter',label:'Presenter'},
@@ -1569,7 +1571,7 @@ function toggleFilterPanel(){
 function renderStats(){
   const fc=getFiltered();
   const isFiltering=fc.length!==cards.length;
-  document.getElementById('statsBar').innerHTML=STAGES.map((s,i)=>{
+  document.getElementById('statsBar').innerHTML=currentStages().map((s,i)=>{
     const fCount=fc.filter(c=>c.stage===i).length;
     const tCount=cards.filter(c=>c.stage===i).length;
     const num=isFiltering?`${fCount}<span style="font-size:12px;color:var(--text3);font-weight:300">/${tCount}</span>`:`${fCount}`;
@@ -1665,7 +1667,7 @@ function renderAll(){
   const sx=bw?bw.scrollLeft:0;
   renderStats();
   const fc=getFiltered();
-  document.getElementById('board').innerHTML=STAGES.map((s,i)=>{
+  document.getElementById('board').innerHTML=currentStages().map((s,i)=>{
     const stageCards=sortCards(fc.filter(c=>c.stage===i));
     const expanded=expandedStages.has(i);
     const visibleCards=expanded?stageCards:stageCards.slice(0,CARD_COLLAPSE_LIMIT);
@@ -1734,6 +1736,9 @@ function resetModal(){
   document.getElementById('thumbUploadField').style.display=isCarousel?'none':'block';
   document.getElementById('carouselImagesField').style.display=isCarousel?'block':'none';
   if(isCarousel){renderCarouselImagesGrid();document.getElementById('carouselImagesStatus').textContent='';}
+  // Populate stage options based on board mode
+  const stageEl=document.getElementById('fStage');
+  stageEl.innerHTML=currentStages().map((s,i)=>`<option value="${i}">${s}</option>`).join('');
   ['fFormat','fCategory','fPresenter','fAssign','fEditor','fPriority','fCompliance','fApprove','fStage'].forEach(id=>{const el=document.getElementById(id);if(el.options[0])el.selectedIndex=0;});
   document.getElementById('fFormat').value='Short';
   const firstCat=categoriesForOptions()[0]||'';
@@ -1741,6 +1746,8 @@ function resetModal(){
   ['thumbStatus','vidStatus','thumbLink','vidLink'].forEach(id=>document.getElementById(id).textContent='');
   document.getElementById('thumbLabel').textContent='Upload image';
   document.getElementById('vidLabel').textContent='Upload video';
+  document.getElementById('thumbRemove').style.display='none';
+  document.getElementById('vidRemove').style.display='none';
   document.getElementById('fNameError').textContent='';
   document.getElementById('fNameLabel').firstChild.textContent=isCarousel?'Carousel name ':'Video name ';
   ['thumbPreview','vidPreview'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.innerHTML='';});
@@ -1790,6 +1797,7 @@ function openEdit(id){
     document.getElementById('thumbLabel').textContent='Change image';
     const tv=safeUrl(c.thumbUrl);
     document.getElementById('thumbLink').innerHTML=tv?`<a href="${escHtml(tv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    document.getElementById('thumbRemove').style.display='block';
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
   if(c.vidUrl){
@@ -1798,6 +1806,7 @@ function openEdit(id){
     document.getElementById('vidLabel').textContent='Change video';
     const vv=safeUrl(c.vidUrl);
     document.getElementById('vidLink').innerHTML=vv?`<a href="${escHtml(vv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    document.getElementById('vidRemove').style.display='block';
     setPreview('vid',vidDisplayUrl,c.name);
   }
   document.getElementById('modalBg').classList.add('open');
@@ -1818,10 +1827,29 @@ async function handleUpload(file,type){
     statusEl.textContent='Uploaded ✓';
     const rl=safeUrl(result.shareUrl);
     linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    document.getElementById(type+'Remove').style.display='block';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,document.getElementById('fName').value||'');
     showToast(LOCAL_MODE?'File saved locally':'File uploaded to OneDrive','success');
   }catch(e){statusEl.className='upload-status error';statusEl.textContent='Upload failed: '+e.message;showToast('Upload failed','error');}
   boxEl.classList.remove('uploading');
+}
+
+function removeUpload(type){
+  if(type==='thumb'){
+    thumbOneDriveUrl=null;thumbItemId=null;thumbDisplayUrl=null;
+    document.getElementById('thumbStatus').textContent='';
+    document.getElementById('thumbLabel').textContent='Upload image';
+    document.getElementById('thumbLink').innerHTML='';
+    document.getElementById('thumbRemove').style.display='none';
+    const p=document.getElementById('thumbPreview');p.style.display='none';p.innerHTML='';
+  }else{
+    vidOneDriveUrl=null;vidItemId=null;vidDisplayUrl=null;
+    document.getElementById('vidStatus').textContent='';
+    document.getElementById('vidLabel').textContent='Upload video';
+    document.getElementById('vidLink').innerHTML='';
+    document.getElementById('vidRemove').style.display='none';
+    const p=document.getElementById('vidPreview');p.style.display='none';p.innerHTML='';
+  }
 }
 
 function renderCarouselImagesGrid(){
@@ -1963,7 +1991,7 @@ function computeReport() {
     const vals = labels || [...new Set(arr.map(c=>c[key]).filter(Boolean))];
     return vals.map(v=>({label:v, count:arr.filter(c=>c[key]===v).length})).filter(x=>x.count>0).sort((a,b)=>b.count-a.count);
   };
-  const byStage    = STAGES.map((s,i)=>({label:s, count:scopeCards.filter(c=>c.stage===i).length})).filter(x=>x.count>0);
+  const byStage    = currentStages().map((s,i)=>({label:s, count:scopeCards.filter(c=>c.stage===i).length})).filter(x=>x.count>0);
   const byFormat   = grouped(scopeCards,'format',['Short','Long']);
   const byCategory = grouped(scopeCards,'category');
   const byPresenter= grouped(scopeCards,'presenter');
@@ -2034,7 +2062,7 @@ function exportCSV() {
   const r = computeReport();
   const headers = ['Name','Format','Category','Stage','Presenter','Assigned','Editor','Priority','Post Date','Due Date','Channel','Segment','Compliance','Approved By','Has Thumbnail',boardMode==='carousels'?'Has Images':'Has Video','Has Script','SEO Title','SEO Description','Notes'];
   const rows = r.scopeCards.map(c => [
-    c.name, c.format, c.category, STAGES[c.stage]||'',
+    c.name, c.format, c.category, currentStages()[c.stage]||'',
     c.presenter, c.assign, c.editor, c.priority,
     c.postDate, c.dueDate, c.channel, c.segment,
     c.compliance, c.approve,
