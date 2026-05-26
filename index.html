@@ -608,6 +608,9 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
         <span style="font-size:12px">Add images (select multiple)</span>
       </div>
       <input type="file" id="carouselImagesFile" accept="image/*" multiple style="display:none">
+      <div id="carouselDownloadAll" style="display:none;margin-top:6px">
+        <button type="button" class="btn" style="font-size:11px;padding:3px 10px" onclick="downloadAllCarouselImages()">⬇ Download all images</button>
+      </div>
       <div class="upload-status" id="carouselImagesStatus" style="margin-top:4px"></div>
     </div>
 
@@ -734,7 +737,7 @@ let carouselLoaded = false;
 
 // ========== CONSTANTS ==========
 const STAGES          = ['Script','Recording','Under editing','Ready to post','Posted'];
-const CAROUSEL_STAGES = ['Download','Script','Working on','Ready to post','Posted'];
+const CAROUSEL_STAGES = ['Script','Working on','Ready to post','Posted'];
 function currentStages(){ return boardMode==='carousels'?CAROUSEL_STAGES:STAGES; }
 const DEFAULT_CATEGORIES = ['Education','Market','Motivation','Challenge','Funny','Branding','Story','Top XXX','General'];
 const ROLE_DEFS = [
@@ -1735,7 +1738,7 @@ function resetModal(){
   document.getElementById('vidUploadField').style.display=isCarousel?'none':'block';
   document.getElementById('thumbUploadField').style.display=isCarousel?'none':'block';
   document.getElementById('carouselImagesField').style.display=isCarousel?'block':'none';
-  if(isCarousel){renderCarouselImagesGrid();document.getElementById('carouselImagesStatus').textContent='';}
+  if(isCarousel){renderCarouselImagesGrid();document.getElementById('carouselImagesStatus').textContent='';document.getElementById('carouselDownloadAll').style.display='none';}
   // Populate stage options based on board mode
   const stageEl=document.getElementById('fStage');
   stageEl.innerHTML=currentStages().map((s,i)=>`<option value="${i}">${s}</option>`).join('');
@@ -1834,7 +1837,18 @@ async function handleUpload(file,type){
   boxEl.classList.remove('uploading');
 }
 
-function removeUpload(type){
+async function removeUpload(type){
+  const label = type==='thumb' ? 'thumbnail image' : 'video';
+  if(!confirm(`Delete the uploaded ${label} from OneDrive? This cannot be undone.`)) return;
+  const itemId = type==='thumb' ? thumbItemId : vidItemId;
+  if(itemId && !LOCAL_MODE){
+    try{
+      await apiCall(await boardItemPath(itemId),'DELETE');
+    }catch(e){
+      // Ignore 404 (already deleted); fail on others
+      if(e.status!==404) return showToast('Delete failed: '+e.message,'error');
+    }
+  }
   if(type==='thumb'){
     thumbOneDriveUrl=null;thumbItemId=null;thumbDisplayUrl=null;
     document.getElementById('thumbStatus').textContent='';
@@ -1850,6 +1864,7 @@ function removeUpload(type){
     document.getElementById('vidRemove').style.display='none';
     const p=document.getElementById('vidPreview');p.style.display='none';p.innerHTML='';
   }
+  showToast('File deleted from OneDrive','success');
 }
 
 function renderCarouselImagesGrid(){
@@ -1857,6 +1872,8 @@ function renderCarouselImagesGrid(){
   const count=document.getElementById('carouselImageCount');
   if(!grid)return;
   count.textContent=carouselImages.length?`(${carouselImages.length})` :'';
+  const dlBtn=document.getElementById('carouselDownloadAll');
+  if(dlBtn) dlBtn.style.display=carouselImages.length?'block':'none';
   grid.innerHTML=carouselImages.map((img,i)=>{
     const src=escHtml(safeUrl(img.downloadUrl||img.shareUrl)||'');
     return `<div class="carousel-img-thumb">
@@ -1870,6 +1887,28 @@ function renderCarouselImagesGrid(){
 function removeCarouselImage(idx){
   carouselImages.splice(idx,1);
   renderCarouselImagesGrid();
+}
+
+async function downloadAllCarouselImages(){
+  if(!carouselImages.length) return;
+  showToast(`Downloading ${carouselImages.length} image${carouselImages.length>1?'s':''}...`,'success');
+  for(let i=0;i<carouselImages.length;i++){
+    const img=carouselImages[i];
+    const url=img.downloadUrl||img.shareUrl;
+    if(!url) continue;
+    // Fetch as blob to force download (avoids tab-open on direct URL)
+    try{
+      const blob=await(await fetch(url)).blob();
+      const ext=blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':'.jpg';
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=`slide-${i+1}${ext}`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      // Small delay between downloads to avoid browser blocking
+      if(i<carouselImages.length-1) await new Promise(r=>setTimeout(r,400));
+    }catch(e){showToast(`Failed to download slide ${i+1}`,'error');}
+  }
 }
 
 async function handleCarouselImagesUpload(files){
