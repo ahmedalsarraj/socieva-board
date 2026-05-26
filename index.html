@@ -1136,15 +1136,17 @@ async function saveData(){
 
 async function switchBoardMode(mode){
   if(boardMode===mode)return;
-  // back up current cards
-  if(boardMode==='videos') carouselCards=[];
+  // Clear board immediately so old cards don't flash under new mode
+  cards=[];
+  setLoading(20);
+  document.getElementById('board').innerHTML='';
+  document.getElementById('statsBar').innerHTML='';
   boardMode=mode;
   document.querySelectorAll('.board-tab').forEach(t=>t.classList.toggle('active',t.dataset.mode===mode));
   const label=mode==='videos'?'Videos':'Carousels';
   document.getElementById('openAddBtn').textContent='+ New '+label.slice(0,-1);
   document.getElementById('modalTitle').textContent='New '+label.slice(0,-1);
   document.getElementById('fpHasVidLabel').style.display=mode==='carousels'?'none':'';
-  // reset filters when switching modes
   clearAllFilters();
   setLoading(40);
   try{
