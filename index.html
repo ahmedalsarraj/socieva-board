@@ -751,6 +751,7 @@ let filterPanelOpen = false;
 let boardMode = 'videos'; // 'videos' | 'carousels'
 let carouselCards = [];
 let carouselLoaded = false;
+let lastETag = {videos:'',carousels:''};
 
 // ========== CONSTANTS ==========
 const STAGES          = ['Script','Recording','Under editing','Ready to post','Posted'];
@@ -976,9 +977,9 @@ async function getToken(){
   return cachedToken;
 }
 
-async function apiCall(url,method='GET',body=null,isBlob=false){
+async function apiCall(url,method='GET',body=null,isBlob=false,extraHeaders={}){
   const token=await getToken();
-  const opts={method,headers:{'Authorization':'Bearer '+token}};
+  const opts={method,headers:{'Authorization':'Bearer '+token,...extraHeaders}};
   if(body&&!(body instanceof Blob)&&!(body instanceof ArrayBuffer)){
     opts.headers['Content-Type']='application/json';
     opts.body=JSON.stringify(body);
@@ -1125,17 +1126,20 @@ async function loadData(){
   if(boardMode==='carousels'){
     try{
       const meta=await apiCall(await boardPath(CAROUSELS_FILE));
+      lastETag.carousels=meta.eTag||'';
       const blob=await apiCall(await boardItemContentPath(meta.id),undefined,null,true);
       const data=JSON.parse(await blob.text());
       cards=Array.isArray(data.cards)?data.cards:[];
     }catch(e){
       if(e.status!==404)throw e;
       cards=[];
+      lastETag.carousels='';
     }
     return;
   }
   try{
     const meta=await apiCall(await boardPath(DATA_FILE));
+    lastETag.videos=meta.eTag||'';
     const blob=await apiCall(await boardItemContentPath(meta.id),undefined,null,true);
     parseBoardData(JSON.parse(await blob.text()));
   }catch(e){
@@ -1155,11 +1159,27 @@ async function saveData(){
   }
   if(boardMode==='carousels'){
     const json=JSON.stringify({version:1,cards},null,2);
-    await apiCall(`${await boardPath(CAROUSELS_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}));
+    const etag=lastETag.carousels;
+    const hdrs=etag?{'If-Match':etag}:{};
+    let saved;
+    try{saved=await apiCall(`${await boardPath(CAROUSELS_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}),false,hdrs);}
+    catch(e){
+      if(e.status===412){const ce=new Error('Data was changed by someone else — reload the page before saving.');ce.status=412;throw ce;}
+      throw e;
+    }
+    if(saved?.eTag)lastETag.carousels=saved.eTag;
     return;
   }
   const json=JSON.stringify(buildBoardPayload(),null,2);
-  await apiCall(`${await boardPath(DATA_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}));
+  const etag=lastETag.videos;
+  const hdrs=etag?{'If-Match':etag}:{};
+  let saved;
+  try{saved=await apiCall(`${await boardPath(DATA_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}),false,hdrs);}
+  catch(e){
+    if(e.status===412){const ce=new Error('Data was changed by someone else — reload the page before saving.');ce.status=412;throw ce;}
+    throw e;
+  }
+  if(saved?.eTag)lastETag.videos=saved.eTag;
 }
 
 async function switchBoardMode(mode){
@@ -1616,13 +1636,19 @@ function toggleFilterPanel(){
   document.getElementById('filterToggleBtn').classList.toggle('active',filterPanelOpen);
 }
 
-function renderStats(){
-  const fc=getFiltered();
+function renderStats(fc){
+  if(!fc)fc=getFiltered();
+  const stages=currentStages();
   const isFiltering=fc.length!==cards.length;
-  document.getElementById('statsBar').innerHTML=currentStages().map((s,i)=>{
-    const fCount=fc.filter(c=>c.stage===i).length;
-    const tCount=cards.filter(c=>c.stage===i).length;
-    const num=isFiltering?`${fCount}<span style="font-size:12px;color:var(--text3);font-weight:300">/${tCount}</span>`:`${fCount}`;
+  const fCounts=new Array(stages.length).fill(0);
+  fc.forEach(c=>{if(c.stage>=0&&c.stage<stages.length)fCounts[c.stage]++;});
+  let tCounts=fCounts;
+  if(isFiltering){
+    tCounts=new Array(stages.length).fill(0);
+    cards.forEach(c=>{if(c.stage>=0&&c.stage<stages.length)tCounts[c.stage]++;});
+  }
+  document.getElementById('statsBar').innerHTML=stages.map((s,i)=>{
+    const num=isFiltering?`${fCounts[i]}<span style="font-size:12px;color:var(--text3);font-weight:300">/${tCounts[i]}</span>`:`${fCounts[i]}`;
     return`<div class="stat"><div class="stat-num">${num}</div><div class="stat-label">${s}</div></div>`;
   }).join('');
 }
@@ -1713,8 +1739,8 @@ function sortCards(arr){
 function renderAll(){
   const bw=document.querySelector('.board-wrap');
   const sx=bw?bw.scrollLeft:0;
-  renderStats();
   const fc=getFiltered();
+  renderStats(fc);
   document.getElementById('board').innerHTML=currentStages().map((s,i)=>{
     const stageCards=sortCards(fc.filter(c=>c.stage===i));
     const expanded=expandedStages.has(i);
