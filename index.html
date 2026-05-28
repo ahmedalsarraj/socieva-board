@@ -705,6 +705,26 @@ const TOKEN_WORKER_URL = 'https://socieva-onedrive-token.ahmedalsarrajm.workers.
 let cachedToken = null;
 let tokenExpiresAt = 0;
 
+// ========== DEBOUNCE ==========
+function debounce(fn,delay=200){let t;return(...args)=>{clearTimeout(t);t=setTimeout(()=>fn(...args),delay);};}
+
+// ========== DISPLAY URL TTL ==========
+const DISPLAY_URL_TTL_MS = 45 * 60 * 1000; // 45 min (Graph download URLs expire in ~60 min)
+
+// Concurrency limiter — max 5 parallel Graph requests
+async function mapLimit(arr, limit, fn){
+  const results=[];
+  let i=0;
+  async function next(){
+    const idx=i++;
+    if(idx>=arr.length)return;
+    results[idx]=await fn(arr[idx],idx);
+    await next();
+  }
+  await Promise.all(Array.from({length:Math.min(limit,arr.length)},next));
+  return results;
+}
+
 // ========== STATE ==========
 let currentSession = null;
 let boardUsers = [];
@@ -1041,22 +1061,28 @@ async function startBoardApp(session){
   try{
     await ensureFolder();
     await loadData();
-    setLoading(70);
-    await refreshDisplayUrls();
-    setLoading(100);setTimeout(()=>setLoading(0),500);
+    setLoading(80);
   }catch(e){showToast('Board load error: '+e.message,'error');setLoading(0);}
   refreshOptionLists();
   updateSettingsAccess();
   updateFilterBadge();
   renderStagePills();
   renderAll();
+  setLoading(100);setTimeout(()=>setLoading(0),400);
+  // Refresh display URLs in background — re-render when done
+  refreshDisplayUrls().then(()=>renderAll()).catch(()=>{});
+  let lastDataSnapshot='';
   setInterval(async()=>{
     if(!currentSession)return;
     if(document.getElementById('modalBg').classList.contains('open'))return;
     if(pendingDelete)return;
     setSyncDot('syncing');
-    try{await loadData();refreshOptionLists();renderAll();setSyncDot('ok');}
-    catch(e){setSyncDot('error');}
+    try{
+      await loadData();
+      const snapshot=JSON.stringify(cards.map(c=>c.id+c.stage+c.name));
+      if(snapshot!==lastDataSnapshot){lastDataSnapshot=snapshot;refreshOptionLists();renderAll();}
+      setSyncDot('ok');
+    }catch(e){setSyncDot('error');}
   },2*60*1000);
   setInterval(async()=>{
     if(!currentSession)return;
@@ -1158,13 +1184,14 @@ async function switchBoardMode(mode){
     }else{
       await loadData();
     }
-    await refreshDisplayUrls();
-    setLoading(100);setTimeout(()=>setLoading(0),400);
+    setLoading(90);
   }catch(e){showToast('Error loading '+mode+': '+e.message,'error');setLoading(0);}
   refreshOptionLists();
   renderStagePills();
-  activeFilters.stage=''; // reset stage filter on board switch
+  activeFilters.stage='';
   renderAll();
+  setLoading(100);setTimeout(()=>setLoading(0),400);
+  refreshDisplayUrls().then(()=>renderAll()).catch(()=>{});
 }
 
 async function uploadFile(file,subfolder){
@@ -1200,7 +1227,10 @@ async function uploadFile(file,subfolder){
 
 async function refreshDisplayUrls(){
   if(LOCAL_MODE)return;
-  await Promise.all(cards.map(async c=>{
+  const now=Date.now();
+  const needsRefresh=c=>!c._urlFetchedAt||(now-c._urlFetchedAt>DISPLAY_URL_TTL_MS);
+  await mapLimit(cards,5,async c=>{
+    if(!needsRefresh(c))return;
     if(c.thumbItemId){
       try{const m=await apiCall(await boardItemPath(c.thumbItemId));c.thumbDisplayUrl=m['@microsoft.graph.downloadUrl']||c.thumbDisplayUrl;}
       catch(e){if(c.thumbUrl){try{const m=await apiCall(`/shares/${encodeSharingUrl(c.thumbUrl)}/driveItem`);c.thumbItemId=m.remoteItem?.id||m.id;c.thumbDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(inner){}}}
@@ -1213,15 +1243,13 @@ async function refreshDisplayUrls(){
     }else if(c.vidUrl&&!c.vidDisplayUrl){
       try{const m=await apiCall(`/shares/${encodeSharingUrl(c.vidUrl)}/driveItem`);c.vidItemId=m.remoteItem?.id||m.id;c.vidDisplayUrl=(m.remoteItem&&m.remoteItem['@microsoft.graph.downloadUrl'])||m['@microsoft.graph.downloadUrl']||null;}catch(e){}
     }
-    // Refresh carousel images download URLs
     if(Array.isArray(c.images)&&c.images.length){
-      await Promise.all(c.images.map(async img=>{
-        if(img.itemId){
-          try{const m=await apiCall(await boardItemPath(img.itemId));img.downloadUrl=m['@microsoft.graph.downloadUrl']||img.downloadUrl;}catch(e){}
-        }
-      }));
+      await mapLimit(c.images,4,async img=>{
+        if(img.itemId){try{const m=await apiCall(await boardItemPath(img.itemId));img.downloadUrl=m['@microsoft.graph.downloadUrl']||img.downloadUrl;}catch(e){}}
+      });
     }
-  }));
+    c._urlFetchedAt=Date.now();
+  });
 }
 
 // ========== SETTINGS ==========
@@ -1524,7 +1552,7 @@ function renderStagePills(){
       activeFilters.stage=btn.dataset.val;
       document.querySelectorAll('#fpStageGroup .fp-pill').forEach(x=>x.classList.remove('active'));
       btn.classList.add('active');
-      updateFilterBadge();renderBoard();renderStats();
+      updateFilterBadge();renderAll();
     });
   });
 }
@@ -1634,7 +1662,7 @@ function renderCard(c){
     }
   }else{
     const videoTile=vidSrc
-      ?`<div class="card-media-item has-file" title="Video preview" onclick="event.stopPropagation();openLightbox('vid',${jsArg(vidSrc)},${jsArg(c.name||'')})"><video src="${escHtml(vidSrc)}" muted playsinline preload="metadata"></video><div class="card-media-play">▶</div><span class="card-media-caption">Video</span></div>`
+      ?`<div class="card-media-item has-file" title="Play video" onclick="event.stopPropagation();openLightbox('vid',${jsArg(vidSrc)},${jsArg(c.name||'')})"><div class="card-media-play" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px">▶</div><span class="card-media-caption">Video</span></div>`
       :`<div class="card-media-item" title="No video"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/></svg><span>Video</span></div></div>`;
     mediaSectionHtml=`<div class="card-media">${thumbTile}${videoTile}</div>`;
   }
@@ -1847,7 +1875,7 @@ async function handleUpload(file,type){
     statusEl.textContent='Uploaded ✓';
     const rl=safeUrl(result.shareUrl);
     linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
-    document.getElementById(type+'Remove').style.display='block';
+    document.getElementById(type+'Actions').style.display='flex';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,document.getElementById('fName').value||'');
     showToast(LOCAL_MODE?'File saved locally':'File uploaded to OneDrive','success');
   }catch(e){statusEl.className='upload-status error';statusEl.textContent='Upload failed: '+e.message;showToast('Upload failed','error');}
@@ -1985,8 +2013,15 @@ function showToastUndo(msg){
   const span=document.createElement('span');span.textContent=msg;
   const btn=document.createElement('button');btn.textContent='Undo';
   btn.style.cssText='margin-left:12px;background:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px;font-size:12px;color:inherit;cursor:pointer;font-family:inherit';
-  btn.addEventListener('click',()=>{
-    if(pendingDelete){clearTimeout(pendingDelete.timer);cards.splice(pendingDelete.index,0,pendingDelete.card);pendingDelete=null;renderAll();t.classList.remove('show');}
+  btn.addEventListener('click',async()=>{
+    if(pendingDelete){
+      clearTimeout(pendingDelete.timer);
+      cards.splice(pendingDelete.index,0,pendingDelete.card);
+      pendingDelete=null;
+      renderAll();
+      t.classList.remove('show');
+      try{await saveData();}catch(e){showToast('Undo save failed: '+e.message,'error');}
+    }
   });
   const bar=document.createElement('div');bar.className='toast-bar';
   t.appendChild(span);t.appendChild(btn);t.appendChild(bar);
@@ -2249,7 +2284,7 @@ document.getElementById('newPersonName').addEventListener('keydown',e=>{if(e.key
 document.getElementById('newCategoryName').addEventListener('keydown',e=>{if(e.key==='Enter')addSettingsCategory();});
 document.getElementById('newUserNameInput').addEventListener('keydown',e=>{if(e.key==='Enter')addUser();});
 document.getElementById('settingsBg').addEventListener('click',function(e){if(e.target===this)closeSettings();});
-document.getElementById('searchInput').addEventListener('input',e=>{activeFilters.q=e.target.value.toLowerCase();updateFilterBadge();renderAll();});
+document.getElementById('searchInput').addEventListener('input',debounce(e=>{activeFilters.q=e.target.value.toLowerCase();updateFilterBadge();renderAll();}));
 document.getElementById('filterToggleBtn').addEventListener('click',toggleFilterPanel);
 document.getElementById('sortDirBtn').addEventListener('click',()=>{
   sortDir=sortDir==='asc'?'desc':'asc';
@@ -2287,8 +2322,8 @@ document.querySelectorAll('#fpFormatGroup .fp-pill').forEach(p=>{
   });
 });
 // Text inputs
-document.getElementById('fpChannel').addEventListener('input',e=>{activeFilters.channel=e.target.value;e.target.classList.toggle('active',!!e.target.value);updateFilterBadge();renderAll();});
-document.getElementById('fpSegment').addEventListener('input',e=>{activeFilters.segment=e.target.value;e.target.classList.toggle('active',!!e.target.value);updateFilterBadge();renderAll();});
+document.getElementById('fpChannel').addEventListener('input',debounce(e=>{activeFilters.channel=e.target.value;e.target.classList.toggle('active',!!e.target.value);updateFilterBadge();renderAll();}));
+document.getElementById('fpSegment').addEventListener('input',debounce(e=>{activeFilters.segment=e.target.value;e.target.classList.toggle('active',!!e.target.value);updateFilterBadge();renderAll();}));
 // Checkboxes
 [['fpHasThumb','hasThumb','fpHasThumbLabel'],['fpHasVid','hasVid','fpHasVidLabel'],
  ['fpOverdue','overdue','fpOverdueLabel'],['fpDueSoon','dueSoon','fpDueSoonLabel']].forEach(([cbId,key,lblId])=>{
