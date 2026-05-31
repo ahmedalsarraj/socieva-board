@@ -629,26 +629,6 @@ function setActionButtonsDisabled(containerId,disabled){
   container.querySelectorAll('button').forEach(btn=>{btn.disabled=disabled;});
 }
 
-async function fetchBlobWithProgress(url,onProgress){
-  const res=await fetch(url);
-  if(!res.ok)throw new Error(`Download failed: ${res.status}`);
-  const total=parseInt(res.headers.get('Content-Length')||'0',10);
-  if(!res.body||!total){
-    onProgress?.(null);
-    return res.blob();
-  }
-  const reader=res.body.getReader();
-  const chunks=[];
-  let loaded=0;
-  while(true){
-    const {done,value}=await reader.read();
-    if(done)break;
-    chunks.push(value);
-    loaded+=value.length;
-    onProgress?.(Math.round((loaded/total)*100));
-  }
-  return new Blob(chunks,{type:res.headers.get('Content-Type')||'application/octet-stream'});
-}
 
 async function refreshDisplayUrls(){
   if(LOCAL_MODE)return;
@@ -1316,32 +1296,18 @@ async function handleUpload(file,type){
   boxEl.classList.remove('uploading');
 }
 
-async function downloadUpload(type){
-  const gen=transferGen;
+function downloadUpload(type){
   const url = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
   const name = document.getElementById('fName').value || 'file';
   const ext = type==='thumb' ? '.jpg' : '.mp4';
-  const statusEl=document.getElementById(type+'Status');
   if(!url){showToast('No file to download','error');return;}
-  setActionButtonsDisabled(type+'Actions',true);
-  setTransferStatus(statusEl,'Downloading',0);
-  try{
-    const blob = await fetchBlobWithProgress(url,pct=>{
-      if(transferGen!==gen)return;
-      if(typeof pct==='number')setTransferStatus(statusEl,'Downloading',pct);
-      else setTransferStatus(statusEl,'Downloading');
-    });
-    if(transferGen!==gen){setActionButtonsDisabled(type+'Actions',false);return;}
-    const realExt = blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':blob.type.includes('mp4')?'.mp4':blob.type.includes('mov')?'.mov':ext;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name+'-'+(type==='thumb'?'thumbnail':'video')+realExt;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    setPlainStatus(statusEl,'Download started ✓');
-    setTimeout(()=>{if(transferGen===gen&&statusEl.textContent==='Download started ✓')setPlainStatus(statusEl,'File uploaded ✓');},1800);
-  }catch(e){if(transferGen===gen){setPlainStatus(statusEl,'Download failed: '+e.message,'error');showToast('Download failed: '+e.message,'error');}}
-  if(transferGen===gen)setActionButtonsDisabled(type+'Actions',false);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name+'-'+(type==='thumb'?'thumbnail':'video')+ext;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 async function removeUpload(type){
@@ -1398,36 +1364,19 @@ function removeCarouselImage(idx){
 
 async function downloadAllCarouselImages(){
   if(!carouselImages.length) return;
-  const gen=transferGen;
-  const statusEl=document.getElementById('carouselImagesStatus');
-  setActionButtonsDisabled('carouselDownloadAll',true);
-  setTransferStatus(statusEl,`Downloading 0/${carouselImages.length}`,0);
-  showToast(`Downloading ${carouselImages.length} image${carouselImages.length>1?'s':''}...`,'success');
   for(let i=0;i<carouselImages.length;i++){
-    if(transferGen!==gen)return;
-    const img=carouselImages[i];
-    const url=img.downloadUrl||img.shareUrl;
+    const url=carouselImages[i].downloadUrl||carouselImages[i].shareUrl;
     if(!url) continue;
-    try{
-      const blob=await fetchBlobWithProgress(url,pct=>{
-        if(transferGen!==gen)return;
-        const base=Math.round((i/carouselImages.length)*100);
-        const part=typeof pct==='number'?Math.round(pct/carouselImages.length):0;
-        setTransferStatus(statusEl,`Downloading ${i+1}/${carouselImages.length}`,Math.min(100,base+part));
-      });
-      if(transferGen!==gen)return;
-      const ext=blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':'.jpg';
-      const a=document.createElement('a');
-      a.href=URL.createObjectURL(blob);
-      a.download=`slide-${i+1}${ext}`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-      if(i<carouselImages.length-1) await new Promise(r=>setTimeout(r,400));
-    }catch(e){if(transferGen===gen)showToast(`Failed to download slide ${i+1}`,'error');}
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=`slide-${i+1}`;
+    a.target='_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    if(i<carouselImages.length-1) await new Promise(r=>setTimeout(r,300));
   }
-  if(transferGen!==gen)return;
-  setPlainStatus(statusEl,`Download started for ${carouselImages.length} image${carouselImages.length>1?'s':''} ✓`);
-  setActionButtonsDisabled('carouselDownloadAll',false);
+  showToast(`Download started for ${carouselImages.length} image${carouselImages.length>1?'s':''}...`,'success');
 }
 
 async function handleCarouselImagesUpload(files){
