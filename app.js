@@ -69,6 +69,7 @@ let boardMode = 'videos'; // 'videos' | 'carousels'
 let carouselCards = [];
 let carouselLoaded = false;
 let lastETag = {videos:'',carousels:''};
+let transferGen = 0; // incremented on every resetModal() to cancel stale async callbacks
 
 // ========== CONSTANTS ==========
 const STAGES          = ['Script','Recording','Under editing','Ready to post','Posted'];
@@ -1202,6 +1203,7 @@ function setPreview(type,url,name){
 }
 
 function resetModal(){
+  transferGen++; // invalidate any in-flight upload/download callbacks
   const isCarousel=boardMode==='carousels';
   thumbOneDriveUrl=null;vidOneDriveUrl=null;
   thumbItemId=null;vidItemId=null;
@@ -1293,13 +1295,15 @@ function openEdit(id){
 function closeModal(){document.getElementById('modalBg').classList.remove('open');}
 
 async function handleUpload(file,type){
+  const gen=transferGen;
   const statusEl=document.getElementById(type+'Status');
   const boxEl=document.getElementById(type+'Box');
   const linkEl=document.getElementById(type+'Link');
   setTransferStatus(statusEl,'Uploading',0);
   boxEl.classList.add('uploading');
   try{
-    const result=await uploadFileWithProgress(file,type==='thumb'?'thumbnails':'videos',pct=>setTransferStatus(statusEl,'Uploading',pct));
+    const result=await uploadFileWithProgress(file,type==='thumb'?'thumbnails':'videos',pct=>{if(transferGen===gen)setTransferStatus(statusEl,'Uploading',pct);});
+    if(transferGen!==gen){boxEl.classList.remove('uploading');return;}
     if(type==='thumb'){thumbOneDriveUrl=result.shareUrl;thumbItemId=result.itemId;thumbDisplayUrl=result.downloadUrl;}
     else{vidOneDriveUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;}
     setPlainStatus(statusEl,'Uploaded ✓');
@@ -1308,11 +1312,12 @@ async function handleUpload(file,type){
     document.getElementById(type+'Actions').style.display='flex';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,document.getElementById('fName').value||'');
     showToast(LOCAL_MODE?'File saved locally':'File uploaded to OneDrive','success');
-  }catch(e){setPlainStatus(statusEl,'Upload failed: '+e.message,'error');showToast('Upload failed','error');}
+  }catch(e){if(transferGen===gen){setPlainStatus(statusEl,'Upload failed: '+e.message,'error');showToast('Upload failed','error');}}
   boxEl.classList.remove('uploading');
 }
 
 async function downloadUpload(type){
+  const gen=transferGen;
   const url = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
   const name = document.getElementById('fName').value || 'file';
   const ext = type==='thumb' ? '.jpg' : '.mp4';
@@ -1322,9 +1327,11 @@ async function downloadUpload(type){
   setTransferStatus(statusEl,'Downloading',0);
   try{
     const blob = await fetchBlobWithProgress(url,pct=>{
+      if(transferGen!==gen)return;
       if(typeof pct==='number')setTransferStatus(statusEl,'Downloading',pct);
       else setTransferStatus(statusEl,'Downloading');
     });
+    if(transferGen!==gen){setActionButtonsDisabled(type+'Actions',false);return;}
     const realExt = blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':blob.type.includes('mp4')?'.mp4':blob.type.includes('mov')?'.mov':ext;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1332,9 +1339,9 @@ async function downloadUpload(type){
     a.click();
     URL.revokeObjectURL(a.href);
     setPlainStatus(statusEl,'Download started ✓');
-    setTimeout(()=>{if(statusEl.textContent==='Download started ✓')setPlainStatus(statusEl,'File uploaded ✓');},1800);
-  }catch(e){setPlainStatus(statusEl,'Download failed: '+e.message,'error');showToast('Download failed: '+e.message,'error');}
-  setActionButtonsDisabled(type+'Actions',false);
+    setTimeout(()=>{if(transferGen===gen&&statusEl.textContent==='Download started ✓')setPlainStatus(statusEl,'File uploaded ✓');},1800);
+  }catch(e){if(transferGen===gen){setPlainStatus(statusEl,'Download failed: '+e.message,'error');showToast('Download failed: '+e.message,'error');}}
+  if(transferGen===gen)setActionButtonsDisabled(type+'Actions',false);
 }
 
 async function removeUpload(type){
@@ -1391,36 +1398,40 @@ function removeCarouselImage(idx){
 
 async function downloadAllCarouselImages(){
   if(!carouselImages.length) return;
+  const gen=transferGen;
   const statusEl=document.getElementById('carouselImagesStatus');
   setActionButtonsDisabled('carouselDownloadAll',true);
   setTransferStatus(statusEl,`Downloading 0/${carouselImages.length}`,0);
   showToast(`Downloading ${carouselImages.length} image${carouselImages.length>1?'s':''}...`,'success');
   for(let i=0;i<carouselImages.length;i++){
+    if(transferGen!==gen)return;
     const img=carouselImages[i];
     const url=img.downloadUrl||img.shareUrl;
     if(!url) continue;
-    // Fetch as blob to force download (avoids tab-open on direct URL)
     try{
       const blob=await fetchBlobWithProgress(url,pct=>{
+        if(transferGen!==gen)return;
         const base=Math.round((i/carouselImages.length)*100);
         const part=typeof pct==='number'?Math.round(pct/carouselImages.length):0;
         setTransferStatus(statusEl,`Downloading ${i+1}/${carouselImages.length}`,Math.min(100,base+part));
       });
+      if(transferGen!==gen)return;
       const ext=blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':'.jpg';
       const a=document.createElement('a');
       a.href=URL.createObjectURL(blob);
       a.download=`slide-${i+1}${ext}`;
       a.click();
       URL.revokeObjectURL(a.href);
-      // Small delay between downloads to avoid browser blocking
       if(i<carouselImages.length-1) await new Promise(r=>setTimeout(r,400));
-    }catch(e){showToast(`Failed to download slide ${i+1}`,'error');}
+    }catch(e){if(transferGen===gen)showToast(`Failed to download slide ${i+1}`,'error');}
   }
+  if(transferGen!==gen)return;
   setPlainStatus(statusEl,`Download started for ${carouselImages.length} image${carouselImages.length>1?'s':''} ✓`);
   setActionButtonsDisabled('carouselDownloadAll',false);
 }
 
 async function handleCarouselImagesUpload(files){
+  const gen=transferGen;
   const statusEl=document.getElementById('carouselImagesStatus');
   const boxEl=document.getElementById('carouselAddImgBox');
   const total=files.length;
@@ -1428,19 +1439,22 @@ async function handleCarouselImagesUpload(files){
   boxEl.classList.add('uploading');
   let done=0;
   for(const file of files){
+    if(transferGen!==gen){boxEl.classList.remove('uploading');return;}
     try{
       const result=await uploadFileWithProgress(file,'thumbnails',pct=>{
+        if(transferGen!==gen)return;
         const base=Math.round((done/total)*100);
         const part=typeof pct==='number'?Math.round(pct/total):0;
         setTransferStatus(statusEl,`Uploading ${done+1}/${total}`,Math.min(100,base+part));
       });
+      if(transferGen!==gen){boxEl.classList.remove('uploading');return;}
       carouselImages.push({shareUrl:result.shareUrl,itemId:result.itemId,downloadUrl:result.downloadUrl});
       done++;
       if(done<total)setTransferStatus(statusEl,`Uploading ${done}/${total}`,Math.round((done/total)*100));
       else setPlainStatus(statusEl,`${done} image${done>1?'s':''} uploaded ✓`);
       renderCarouselImagesGrid();
     }catch(e){
-      setPlainStatus(statusEl,`Failed on "${file.name}": ${e.message}`,'error');
+      if(transferGen===gen)setPlainStatus(statusEl,`Failed on "${file.name}": ${e.message}`,'error');
     }
   }
   boxEl.classList.remove('uploading');
