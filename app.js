@@ -1240,9 +1240,9 @@ function openEdit(id){
   document.getElementById('fDueDate').value=c.dueDate||'';
   document.getElementById('fChannel').value=c.channel||'';
   document.getElementById('fSegment').value=c.segment||'';
-  const fScript=document.getElementById('fScript');fScript.value=c.script||'';fScript.style.height='auto';if(c.script)fScript.style.height=fScript.scrollHeight+'px';
+  document.getElementById('fScript').value=c.script||'';
   document.getElementById('fSeoTitle').value=c.seoTitle||'';
-  const fSeoDesc=document.getElementById('fSeoDesc');fSeoDesc.value=c.seoDesc||'';fSeoDesc.style.height='auto';if(c.seoDesc)fSeoDesc.style.height=fSeoDesc.scrollHeight+'px';
+  document.getElementById('fSeoDesc').value=c.seoDesc||'';
   document.getElementById('fNotes').value=c.notes||'';
   document.getElementById('fCompliance').value=c.compliance||'';
   document.getElementById('fApprove').value=c.approve||'';
@@ -1272,6 +1272,12 @@ function openEdit(id){
     setPreview('vid',vidDisplayUrl,c.name);
   }
   document.getElementById('modalBg').classList.add('open');
+  requestAnimationFrame(()=>{
+    document.querySelectorAll('#modalBg textarea.auto-expand').forEach(el=>{
+      el.style.height='auto';
+      el.style.height=el.scrollHeight+'px';
+    });
+  });
 }
 
 function closeModal(){document.getElementById('modalBg').classList.remove('open');}
