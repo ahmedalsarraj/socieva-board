@@ -60,6 +60,7 @@ body{
 select.filter{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);min-height:var(--control-h);padding:7px 12px;font-size:13px;color:var(--text2);font-family:var(--font);outline:none;cursor:pointer;appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
 .btn{min-height:var(--control-h);padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg3);font-size:13px;color:var(--text);font-family:var(--font);cursor:pointer;transition:all 0.15s;white-space:nowrap}
 .btn:hover{border-color:var(--border2);background:var(--bg4)}
+.btn:disabled{opacity:0.55;cursor:wait}
 .btn-primary{background:var(--blue);border-color:var(--blue);color:#fff}
 .btn-primary:hover{background:var(--blue2);border-color:var(--blue2)}
 .btn-danger{color:#f87171;border-color:#7f1d1d}
@@ -262,6 +263,14 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .upload-label{font-size:12px;color:var(--text3)}
 .upload-status{font-size:11px;color:#5ae8a0;margin-top:4px;text-align:center}
 .upload-status.error{color:#f87171}
+.transfer-status{display:flex;flex-direction:column;gap:5px;color:var(--text2)}
+.transfer-bar{width:100%;height:4px;border-radius:999px;background:rgba(147,197,253,0.12);overflow:hidden}
+.transfer-bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),#7dd3fc);transition:width 0.18s ease}
+.transfer-bar.indeterminate span{width:38%;animation:transferIndeterminate 1.05s ease-in-out infinite}
+@keyframes transferIndeterminate{
+  0%{transform:translateX(-110%)}
+  100%{transform:translateX(270%)}
+}
 .upload-link{font-size:11px;color:var(--blue);word-break:break-all;margin-top:4px;text-align:center}
 .upload-preview{border-radius:var(--radius);overflow:hidden;margin-bottom:8px;cursor:zoom-in;background:var(--bg3);border:1px solid var(--border)}
 .upload-preview img{width:100%;max-height:120px;object-fit:cover;display:block}
