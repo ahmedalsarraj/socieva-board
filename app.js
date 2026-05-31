@@ -70,6 +70,7 @@ let carouselCards = [];
 let carouselLoaded = false;
 let lastETag = {videos:'',carousels:''};
 let transferGen = 0; // incremented on every resetModal() to cancel stale async callbacks
+let activeUploadPromise = null; // set while an upload is in-flight; save waits for it
 
 // ========== CONSTANTS ==========
 const STAGES          = ['Script','Recording','Under editing','Ready to post','Posted'];
@@ -1184,6 +1185,7 @@ function setPreview(type,url,name){
 
 function resetModal(){
   transferGen++; // invalidate any in-flight upload/download callbacks
+  activeUploadPromise = null; // abandon upload tracking for this modal session
   const isCarousel=boardMode==='carousels';
   thumbOneDriveUrl=null;vidOneDriveUrl=null;
   thumbItemId=null;vidItemId=null;
@@ -1279,11 +1281,13 @@ async function handleUpload(file,type){
   const statusEl=document.getElementById(type+'Status');
   const boxEl=document.getElementById(type+'Box');
   const linkEl=document.getElementById(type+'Link');
+  let settle;
+  activeUploadPromise=new Promise(r=>{settle=r;});
   setTransferStatus(statusEl,'Uploading',0);
   boxEl.classList.add('uploading');
   try{
     const result=await uploadFileWithProgress(file,type==='thumb'?'thumbnails':'videos',pct=>{if(transferGen===gen)setTransferStatus(statusEl,'Uploading',pct);});
-    if(transferGen!==gen){boxEl.classList.remove('uploading');return;}
+    if(transferGen!==gen){boxEl.classList.remove('uploading');settle();activeUploadPromise=null;return;}
     if(type==='thumb'){thumbOneDriveUrl=result.shareUrl;thumbItemId=result.itemId;thumbDisplayUrl=result.downloadUrl;}
     else{vidOneDriveUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;}
     setPlainStatus(statusEl,'Uploaded ✓');
@@ -1294,6 +1298,8 @@ async function handleUpload(file,type){
     showToast(LOCAL_MODE?'File saved locally':'File uploaded to OneDrive','success');
   }catch(e){if(transferGen===gen){setPlainStatus(statusEl,'Upload failed: '+e.message,'error');showToast('Upload failed','error');}}
   boxEl.classList.remove('uploading');
+  settle();
+  activeUploadPromise=null;
 }
 
 function downloadUpload(type){
@@ -1384,11 +1390,13 @@ async function handleCarouselImagesUpload(files){
   const statusEl=document.getElementById('carouselImagesStatus');
   const boxEl=document.getElementById('carouselAddImgBox');
   const total=files.length;
+  let settle;
+  activeUploadPromise=new Promise(r=>{settle=r;});
   setTransferStatus(statusEl,`Uploading 0/${total}`,0);
   boxEl.classList.add('uploading');
   let done=0;
   for(const file of files){
-    if(transferGen!==gen){boxEl.classList.remove('uploading');return;}
+    if(transferGen!==gen){boxEl.classList.remove('uploading');settle();activeUploadPromise=null;return;}
     try{
       const result=await uploadFileWithProgress(file,'thumbnails',pct=>{
         if(transferGen!==gen)return;
@@ -1396,7 +1404,7 @@ async function handleCarouselImagesUpload(files){
         const part=typeof pct==='number'?Math.round(pct/total):0;
         setTransferStatus(statusEl,`Uploading ${done+1}/${total}`,Math.min(100,base+part));
       });
-      if(transferGen!==gen){boxEl.classList.remove('uploading');return;}
+      if(transferGen!==gen){boxEl.classList.remove('uploading');settle();activeUploadPromise=null;return;}
       carouselImages.push({shareUrl:result.shareUrl,itemId:result.itemId,downloadUrl:result.downloadUrl});
       done++;
       if(done<total)setTransferStatus(statusEl,`Uploading ${done}/${total}`,Math.round((done/total)*100));
@@ -1407,6 +1415,8 @@ async function handleCarouselImagesUpload(files){
     }
   }
   boxEl.classList.remove('uploading');
+  settle();
+  activeUploadPromise=null;
 }
 
 // ========== LIGHTBOX ==========
@@ -1665,6 +1675,22 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     images: boardMode==='carousels' ? carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})) : undefined
   };
   const btn=document.getElementById('saveBtn');
+  // If an upload is still in-flight, wait for it to finish first
+  if(activeUploadPromise){
+    btn.textContent='Waiting for upload...';btn.disabled=true;
+    await activeUploadPromise;
+    // Modal may have been closed or switched while we waited
+    if(!document.getElementById('modalBg').classList.contains('open'))return;
+    btn.textContent='Save';btn.disabled=false;
+    // Re-read file state now that upload is done (thumbItemId etc. updated)
+    card.thumbUrl=boardMode==='carousels'?(carouselImages[0]?.shareUrl||null):thumbOneDriveUrl;
+    card.thumbItemId=boardMode==='carousels'?(carouselImages[0]?.itemId||null):thumbItemId;
+    card.thumbDisplayUrl=boardMode==='carousels'?(carouselImages[0]?.downloadUrl||null):thumbDisplayUrl;
+    card.vidUrl=boardMode==='carousels'?undefined:vidOneDriveUrl;
+    card.vidItemId=boardMode==='carousels'?undefined:vidItemId;
+    card.vidDisplayUrl=boardMode==='carousels'?undefined:vidDisplayUrl;
+    card.images=boardMode==='carousels'?carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})):undefined;
+  }
   btn.textContent='Saving...';btn.disabled=true;
   try{
     if(editId){const idx=cards.findIndex(c=>c.id===editId);cards[idx]=card;}else{cards.push(card);}
@@ -1775,6 +1801,10 @@ document.getElementById('lightboxClose').addEventListener('click',closeLightbox)
 document.getElementById('lightbox').addEventListener('click',function(e){if(e.target===this)closeLightbox();});
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){closeLightbox();if(document.getElementById('settingsBg').classList.contains('open'))closeSettings();}
+});
+
+window.addEventListener('beforeunload',e=>{
+  if(activeUploadPromise){e.preventDefault();e.returnValue='';}
 });
 
 init().catch(e=>console.error(e));
