@@ -562,6 +562,93 @@ async function uploadFile(file,subfolder){
   return{shareUrl:res.webUrl||null,itemId:res.id,downloadUrl:res['@microsoft.graph.downloadUrl']||null};
 }
 
+async function uploadFileWithProgress(file,subfolder,onProgress){
+  if(LOCAL_MODE){
+    onProgress?.(8);
+    const result=await uploadFile(file,subfolder);
+    onProgress?.(100);
+    return result;
+  }
+  await ensureSubfolder(subfolder);
+  let res;
+  if(file.size<4*1024*1024){
+    const token=await getToken();
+    const url='https://graph.microsoft.com/v1.0'+`${await boardPath(subfolder,file.name)}:/content`;
+    res=await new Promise((resolve,reject)=>{
+      const xhr=new XMLHttpRequest();
+      xhr.open('PUT',url);
+      xhr.setRequestHeader('Authorization','Bearer '+token);
+      xhr.upload.onprogress=e=>{
+        if(e.lengthComputable)onProgress?.(Math.max(1,Math.round((e.loaded/e.total)*100)));
+      };
+      xhr.onload=()=>{
+        if(xhr.status>=200&&xhr.status<300){
+          onProgress?.(100);
+          try{resolve(xhr.responseText?JSON.parse(xhr.responseText):null);}
+          catch(e){reject(e);}
+        }else reject(new Error(xhr.responseText||`Upload failed: ${xhr.status}`));
+      };
+      xhr.onerror=()=>reject(new Error('Network upload failed'));
+      xhr.send(file);
+    });
+  }else{
+    const session=await apiCall(`${await boardPath(subfolder,file.name)}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
+    const chunkSize=320*1024*10;let start=0;
+    while(start<file.size){
+      const end=Math.min(start+chunkSize,file.size);
+      const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:file.slice(start,end)});
+      const text=await r.text();
+      if(!r.ok)throw new Error(text||`Upload failed: ${r.status}`);
+      res=text?JSON.parse(text):null;start=end;
+      onProgress?.(Math.max(1,Math.round((start/file.size)*100)));
+    }
+  }
+  if(!res||!res.id)throw new Error('Upload finished without an item id');
+  return{shareUrl:res.webUrl||null,itemId:res.id,downloadUrl:res['@microsoft.graph.downloadUrl']||null};
+}
+
+function setTransferStatus(el,label,pct=null,variant=''){
+  if(!el)return;
+  el.className='upload-status transfer-status '+variant;
+  const pctText=typeof pct==='number'?` ${Math.max(0,Math.min(100,Math.round(pct)))}%`:'';
+  const barClass=typeof pct==='number'?'':' indeterminate';
+  const barStyle=typeof pct==='number'?` style="width:${Math.max(2,Math.min(100,Math.round(pct)))}%"`:'';
+  el.innerHTML=`<span>${escHtml(label)}${pctText}</span><div class="transfer-bar${barClass}"><span${barStyle}></span></div>`;
+}
+
+function setPlainStatus(el,msg,type=''){
+  if(!el)return;
+  el.className='upload-status '+type;
+  el.textContent=msg;
+}
+
+function setActionButtonsDisabled(containerId,disabled){
+  const container=document.getElementById(containerId);
+  if(!container)return;
+  container.querySelectorAll('button').forEach(btn=>{btn.disabled=disabled;});
+}
+
+async function fetchBlobWithProgress(url,onProgress){
+  const res=await fetch(url);
+  if(!res.ok)throw new Error(`Download failed: ${res.status}`);
+  const total=parseInt(res.headers.get('Content-Length')||'0',10);
+  if(!res.body||!total){
+    onProgress?.(null);
+    return res.blob();
+  }
+  const reader=res.body.getReader();
+  const chunks=[];
+  let loaded=0;
+  while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    chunks.push(value);
+    loaded+=value.length;
+    onProgress?.(Math.round((loaded/total)*100));
+  }
+  return new Blob(chunks,{type:res.headers.get('Content-Type')||'application/octet-stream'});
+}
+
 async function refreshDisplayUrls(){
   if(LOCAL_MODE)return;
   const now=Date.now();
@@ -1209,19 +1296,19 @@ async function handleUpload(file,type){
   const statusEl=document.getElementById(type+'Status');
   const boxEl=document.getElementById(type+'Box');
   const linkEl=document.getElementById(type+'Link');
-  statusEl.className='upload-status';statusEl.textContent='Uploading...';
+  setTransferStatus(statusEl,'Uploading',0);
   boxEl.classList.add('uploading');
   try{
-    const result=await uploadFile(file,type==='thumb'?'thumbnails':'videos');
+    const result=await uploadFileWithProgress(file,type==='thumb'?'thumbnails':'videos',pct=>setTransferStatus(statusEl,'Uploading',pct));
     if(type==='thumb'){thumbOneDriveUrl=result.shareUrl;thumbItemId=result.itemId;thumbDisplayUrl=result.downloadUrl;}
     else{vidOneDriveUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;}
-    statusEl.textContent='Uploaded ✓';
+    setPlainStatus(statusEl,'Uploaded ✓');
     const rl=safeUrl(result.shareUrl);
     linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
     document.getElementById(type+'Actions').style.display='flex';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,document.getElementById('fName').value||'');
     showToast(LOCAL_MODE?'File saved locally':'File uploaded to OneDrive','success');
-  }catch(e){statusEl.className='upload-status error';statusEl.textContent='Upload failed: '+e.message;showToast('Upload failed','error');}
+  }catch(e){setPlainStatus(statusEl,'Upload failed: '+e.message,'error');showToast('Upload failed','error');}
   boxEl.classList.remove('uploading');
 }
 
@@ -1229,16 +1316,25 @@ async function downloadUpload(type){
   const url = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
   const name = document.getElementById('fName').value || 'file';
   const ext = type==='thumb' ? '.jpg' : '.mp4';
+  const statusEl=document.getElementById(type+'Status');
   if(!url){showToast('No file to download','error');return;}
+  setActionButtonsDisabled(type+'Actions',true);
+  setTransferStatus(statusEl,'Downloading',0);
   try{
-    const blob = await(await fetch(url)).blob();
+    const blob = await fetchBlobWithProgress(url,pct=>{
+      if(typeof pct==='number')setTransferStatus(statusEl,'Downloading',pct);
+      else setTransferStatus(statusEl,'Downloading');
+    });
     const realExt = blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':blob.type.includes('mp4')?'.mp4':blob.type.includes('mov')?'.mov':ext;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name+'-'+(type==='thumb'?'thumbnail':'video')+realExt;
     a.click();
     URL.revokeObjectURL(a.href);
-  }catch(e){showToast('Download failed: '+e.message,'error');}
+    setPlainStatus(statusEl,'Download started ✓');
+    setTimeout(()=>{if(statusEl.textContent==='Download started ✓')setPlainStatus(statusEl,'File uploaded ✓');},1800);
+  }catch(e){setPlainStatus(statusEl,'Download failed: '+e.message,'error');showToast('Download failed: '+e.message,'error');}
+  setActionButtonsDisabled(type+'Actions',false);
 }
 
 async function removeUpload(type){
@@ -1295,6 +1391,9 @@ function removeCarouselImage(idx){
 
 async function downloadAllCarouselImages(){
   if(!carouselImages.length) return;
+  const statusEl=document.getElementById('carouselImagesStatus');
+  setActionButtonsDisabled('carouselDownloadAll',true);
+  setTransferStatus(statusEl,`Downloading 0/${carouselImages.length}`,0);
   showToast(`Downloading ${carouselImages.length} image${carouselImages.length>1?'s':''}...`,'success');
   for(let i=0;i<carouselImages.length;i++){
     const img=carouselImages[i];
@@ -1302,7 +1401,11 @@ async function downloadAllCarouselImages(){
     if(!url) continue;
     // Fetch as blob to force download (avoids tab-open on direct URL)
     try{
-      const blob=await(await fetch(url)).blob();
+      const blob=await fetchBlobWithProgress(url,pct=>{
+        const base=Math.round((i/carouselImages.length)*100);
+        const part=typeof pct==='number'?Math.round(pct/carouselImages.length):0;
+        setTransferStatus(statusEl,`Downloading ${i+1}/${carouselImages.length}`,Math.min(100,base+part));
+      });
       const ext=blob.type.includes('png')?'.png':blob.type.includes('gif')?'.gif':'.jpg';
       const a=document.createElement('a');
       a.href=URL.createObjectURL(blob);
@@ -1313,26 +1416,31 @@ async function downloadAllCarouselImages(){
       if(i<carouselImages.length-1) await new Promise(r=>setTimeout(r,400));
     }catch(e){showToast(`Failed to download slide ${i+1}`,'error');}
   }
+  setPlainStatus(statusEl,`Download started for ${carouselImages.length} image${carouselImages.length>1?'s':''} ✓`);
+  setActionButtonsDisabled('carouselDownloadAll',false);
 }
 
 async function handleCarouselImagesUpload(files){
   const statusEl=document.getElementById('carouselImagesStatus');
   const boxEl=document.getElementById('carouselAddImgBox');
   const total=files.length;
-  statusEl.className='upload-status';
-  statusEl.textContent=`Uploading 0/${total}...`;
+  setTransferStatus(statusEl,`Uploading 0/${total}`,0);
   boxEl.classList.add('uploading');
   let done=0;
   for(const file of files){
     try{
-      const result=await uploadFile(file,'thumbnails');
+      const result=await uploadFileWithProgress(file,'thumbnails',pct=>{
+        const base=Math.round((done/total)*100);
+        const part=typeof pct==='number'?Math.round(pct/total):0;
+        setTransferStatus(statusEl,`Uploading ${done+1}/${total}`,Math.min(100,base+part));
+      });
       carouselImages.push({shareUrl:result.shareUrl,itemId:result.itemId,downloadUrl:result.downloadUrl});
       done++;
-      statusEl.textContent=done<total?`Uploading ${done}/${total}...`:`${done} image${done>1?'s':''} uploaded ✓`;
+      if(done<total)setTransferStatus(statusEl,`Uploading ${done}/${total}`,Math.round((done/total)*100));
+      else setPlainStatus(statusEl,`${done} image${done>1?'s':''} uploaded ✓`);
       renderCarouselImagesGrid();
     }catch(e){
-      statusEl.className='upload-status error';
-      statusEl.textContent=`Failed on "${file.name}": ${e.message}`;
+      setPlainStatus(statusEl,`Failed on "${file.name}": ${e.message}`,'error');
     }
   }
   boxEl.classList.remove('uploading');
