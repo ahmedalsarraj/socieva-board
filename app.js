@@ -476,29 +476,34 @@ async function saveData(){
     lsSet(file,payload);
     return;
   }
+  // Helper: PUT content with If-Match, auto-refresh eTag and retry once on 412
+  async function putWithETag(file,blob,etagRef,setETag){
+    for(let attempt=0;attempt<2;attempt++){
+      const hdrs=etagRef()?{'If-Match':etagRef()}:{};
+      let saved;
+      try{saved=await apiCall(`${await boardPath(file)}:/content`,'PUT',blob,false,hdrs);}
+      catch(e){
+        if(e.status===412&&attempt===0){
+          // Stale eTag — refresh from server and retry once
+          try{const meta=await apiCall(await boardPath(file));setETag(meta.eTag||'');}catch(_){}
+          continue;
+        }
+        if(e.status===412){const ce=new Error('Data was changed by someone else — reload the page before saving.');ce.status=412;throw ce;}
+        throw e;
+      }
+      if(saved?.eTag)setETag(saved.eTag);
+      return;
+    }
+  }
   if(boardMode==='carousels'){
     const json=JSON.stringify({version:1,cards},null,2);
-    const etag=lastETag.carousels;
-    const hdrs=etag?{'If-Match':etag}:{};
-    let saved;
-    try{saved=await apiCall(`${await boardPath(CAROUSELS_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}),false,hdrs);}
-    catch(e){
-      if(e.status===412){const ce=new Error('Data was changed by someone else — reload the page before saving.');ce.status=412;throw ce;}
-      throw e;
-    }
-    if(saved?.eTag)lastETag.carousels=saved.eTag;
+    await putWithETag(CAROUSELS_FILE,new Blob([json],{type:'application/json'}),
+      ()=>lastETag.carousels, v=>{lastETag.carousels=v;});
     return;
   }
   const json=JSON.stringify(buildBoardPayload(),null,2);
-  const etag=lastETag.videos;
-  const hdrs=etag?{'If-Match':etag}:{};
-  let saved;
-  try{saved=await apiCall(`${await boardPath(DATA_FILE)}:/content`,'PUT',new Blob([json],{type:'application/json'}),false,hdrs);}
-  catch(e){
-    if(e.status===412){const ce=new Error('Data was changed by someone else — reload the page before saving.');ce.status=412;throw ce;}
-    throw e;
-  }
-  if(saved?.eTag)lastETag.videos=saved.eTag;
+  await putWithETag(DATA_FILE,new Blob([json],{type:'application/json'}),
+    ()=>lastETag.videos, v=>{lastETag.videos=v;});
 }
 
 async function switchBoardMode(mode){
