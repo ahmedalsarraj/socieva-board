@@ -320,13 +320,16 @@ async function ensureFolder(){
   }
 }
 
+const _ensuredSubfolders=new Set();
 async function ensureSubfolder(name){
   if(LOCAL_MODE)return;
+  if(_ensuredSubfolders.has(name))return;
   await ensureFolder();
   // Skip GET check — 'thumbnails' conflicts with Graph API built-in thumbnail endpoint
   // Just attempt creation; ignore 409 (already exists)
   try{await apiCall(await boardChildrenPath(),'POST',{name,folder:{},['@microsoft.graph.conflictBehavior']:'fail'});}
   catch(e){if(e.status!==409)throw e;}
+  _ensuredSubfolders.add(name);
 }
 
 // ========== INIT ==========
@@ -469,6 +472,28 @@ async function loadData(){
   }
 }
 
+// PUT a board JSON file with If-Match; on 412 refreshes eTag and retries once.
+// key is 'videos'|'carousels' — maps directly to lastETag[key].
+async function putWithETag(file,blob,key){
+  for(let attempt=0;attempt<2;attempt++){
+    const etag=lastETag[key];
+    const hdrs=etag?{'If-Match':etag}:{};
+    let saved;
+    try{saved=await apiCall(`${await boardPath(file)}:/content`,'PUT',blob,false,hdrs);}
+    catch(e){
+      if(e.status===412&&attempt===0){
+        // Stale eTag — refresh from server and retry once
+        try{const meta=await apiCall(await boardPath(file));lastETag[key]=meta.eTag||'';}catch(_){}
+        continue;
+      }
+      if(e.status===412){const ce=new Error('Data was changed by someone else — reload the page before saving.');ce.status=412;throw ce;}
+      throw e;
+    }
+    if(saved?.eTag)lastETag[key]=saved.eTag;
+    return;
+  }
+}
+
 async function saveData(){
   if(LOCAL_MODE){
     const file=boardMode==='carousels'?CAROUSELS_FILE:DATA_FILE;
@@ -476,34 +501,12 @@ async function saveData(){
     lsSet(file,payload);
     return;
   }
-  // Helper: PUT content with If-Match, auto-refresh eTag and retry once on 412
-  async function putWithETag(file,blob,etagRef,setETag){
-    for(let attempt=0;attempt<2;attempt++){
-      const hdrs=etagRef()?{'If-Match':etagRef()}:{};
-      let saved;
-      try{saved=await apiCall(`${await boardPath(file)}:/content`,'PUT',blob,false,hdrs);}
-      catch(e){
-        if(e.status===412&&attempt===0){
-          // Stale eTag — refresh from server and retry once
-          try{const meta=await apiCall(await boardPath(file));setETag(meta.eTag||'');}catch(_){}
-          continue;
-        }
-        if(e.status===412){const ce=new Error('Data was changed by someone else — reload the page before saving.');ce.status=412;throw ce;}
-        throw e;
-      }
-      if(saved?.eTag)setETag(saved.eTag);
-      return;
-    }
-  }
   if(boardMode==='carousels'){
     const json=JSON.stringify({version:1,cards},null,2);
-    await putWithETag(CAROUSELS_FILE,new Blob([json],{type:'application/json'}),
-      ()=>lastETag.carousels, v=>{lastETag.carousels=v;});
+    await putWithETag(CAROUSELS_FILE,new Blob([json],{type:'application/json'}),'carousels');
     return;
   }
-  const json=JSON.stringify(buildBoardPayload(),null,2);
-  await putWithETag(DATA_FILE,new Blob([json],{type:'application/json'}),
-    ()=>lastETag.videos, v=>{lastETag.videos=v;});
+  await putWithETag(DATA_FILE,new Blob([JSON.stringify(buildBoardPayload(),null,2)],{type:'application/json'}),'videos');
 }
 
 async function switchBoardMode(mode){
@@ -538,6 +541,20 @@ async function switchBoardMode(mode){
   refreshDisplayUrls().then(()=>renderAll()).catch(()=>{});
 }
 
+// Shared chunked-upload loop used by both uploadFile and uploadFileWithProgress
+async function _chunkedUpload(session,file,onProgress){
+  const chunkSize=320*1024*10;let start=0;let res;
+  while(start<file.size){
+    const end=Math.min(start+chunkSize,file.size);
+    const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:file.slice(start,end)});
+    const text=await r.text();
+    if(!r.ok)throw new Error(text||`Upload failed: ${r.status}`);
+    res=text?JSON.parse(text):null;start=end;
+    onProgress?.(Math.max(1,Math.round((start/file.size)*100)));
+  }
+  return res;
+}
+
 async function uploadFile(file,subfolder){
   if(LOCAL_MODE){
     const isImage=file.type.startsWith('image/');
@@ -555,14 +572,7 @@ async function uploadFile(file,subfolder){
     res=await apiCall(`${await boardPath(subfolder,file.name)}:/content`,'PUT',file);
   }else{
     const session=await apiCall(`${await boardPath(subfolder,file.name)}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
-    const chunkSize=320*1024*10;let start=0;
-    while(start<file.size){
-      const end=Math.min(start+chunkSize,file.size);
-      const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:file.slice(start,end)});
-      const text=await r.text();
-      if(!r.ok)throw new Error(text||`Upload failed: ${r.status}`);
-      res=text?JSON.parse(text):null;start=end;
-    }
+    res=await _chunkedUpload(session,file);
   }
   if(!res||!res.id)throw new Error('Upload finished without an item id');
   // Use webUrl directly — createLink with scope:'organization' requires delegated token
@@ -600,15 +610,7 @@ async function uploadFileWithProgress(file,subfolder,onProgress){
     });
   }else{
     const session=await apiCall(`${await boardPath(subfolder,file.name)}:/createUploadSession`,'POST',{item:{['@microsoft.graph.conflictBehavior']:'rename'}});
-    const chunkSize=320*1024*10;let start=0;
-    while(start<file.size){
-      const end=Math.min(start+chunkSize,file.size);
-      const r=await fetch(session.uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${start}-${end-1}/${file.size}`},body:file.slice(start,end)});
-      const text=await r.text();
-      if(!r.ok)throw new Error(text||`Upload failed: ${r.status}`);
-      res=text?JSON.parse(text):null;start=end;
-      onProgress?.(Math.max(1,Math.round((start/file.size)*100)));
-    }
+    res=await _chunkedUpload(session,file,onProgress);
   }
   if(!res||!res.id)throw new Error('Upload finished without an item id');
   return{shareUrl:res.webUrl||null,itemId:res.id,downloadUrl:res['@microsoft.graph.downloadUrl']||null};
@@ -1652,6 +1654,17 @@ document.getElementById('thumbFile').addEventListener('change',function(){if(thi
 document.getElementById('vidFile').addEventListener('change',function(){if(this.files[0])handleUpload(this.files[0],'vid');});
 document.getElementById('carouselImagesFile').addEventListener('change',function(){if(this.files.length)handleCarouselImagesUpload(Array.from(this.files));this.value='';});
 
+function assignFileState(card){
+  const isC=boardMode==='carousels';
+  card.thumbUrl=isC?(carouselImages[0]?.shareUrl||null):thumbOneDriveUrl;
+  card.thumbItemId=isC?(carouselImages[0]?.itemId||null):thumbItemId;
+  card.thumbDisplayUrl=isC?(carouselImages[0]?.downloadUrl||null):thumbDisplayUrl;
+  card.vidUrl=isC?undefined:vidOneDriveUrl;
+  card.vidItemId=isC?undefined:vidItemId;
+  card.vidDisplayUrl=isC?undefined:vidDisplayUrl;
+  card.images=isC?carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})):undefined;
+}
+
 document.getElementById('saveBtn').addEventListener('click',async()=>{
   const name=document.getElementById('fName').value.trim();
   if(!name){document.getElementById('fName').focus();document.getElementById('fNameError').textContent='Required';return;}
@@ -1676,15 +1689,9 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     compliance:document.getElementById('fCompliance').value,
     approve:document.getElementById('fApprove').value,
     stage:parseInt(document.getElementById('fStage').value),
-    slidesCount:boardMode==='carousels'?(parseInt(document.getElementById('fSlidesCount').value)||null):undefined,
-    thumbUrl: boardMode==='carousels' ? (carouselImages[0]?.shareUrl||null) : thumbOneDriveUrl,
-    thumbItemId: boardMode==='carousels' ? (carouselImages[0]?.itemId||null) : thumbItemId,
-    thumbDisplayUrl: boardMode==='carousels' ? (carouselImages[0]?.downloadUrl||null) : thumbDisplayUrl,
-    vidUrl: boardMode==='carousels' ? undefined : vidOneDriveUrl,
-    vidItemId: boardMode==='carousels' ? undefined : vidItemId,
-    vidDisplayUrl: boardMode==='carousels' ? undefined : vidDisplayUrl,
-    images: boardMode==='carousels' ? carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})) : undefined
+    slidesCount:boardMode==='carousels'?(parseInt(document.getElementById('fSlidesCount').value)||null):undefined
   };
+  assignFileState(card);
   const btn=document.getElementById('saveBtn');
   // If an upload is still in-flight, wait for it to finish first
   if(activeUploadPromise){
@@ -1693,14 +1700,7 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     // Modal may have been closed or switched while we waited
     if(!document.getElementById('modalBg').classList.contains('open'))return;
     btn.textContent='Save';btn.disabled=false;
-    // Re-read file state now that upload is done (thumbItemId etc. updated)
-    card.thumbUrl=boardMode==='carousels'?(carouselImages[0]?.shareUrl||null):thumbOneDriveUrl;
-    card.thumbItemId=boardMode==='carousels'?(carouselImages[0]?.itemId||null):thumbItemId;
-    card.thumbDisplayUrl=boardMode==='carousels'?(carouselImages[0]?.downloadUrl||null):thumbDisplayUrl;
-    card.vidUrl=boardMode==='carousels'?undefined:vidOneDriveUrl;
-    card.vidItemId=boardMode==='carousels'?undefined:vidItemId;
-    card.vidDisplayUrl=boardMode==='carousels'?undefined:vidDisplayUrl;
-    card.images=boardMode==='carousels'?carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})):undefined;
+    assignFileState(card); // re-read file state now that upload is done
   }
   btn.textContent='Saving...';btn.disabled=true;
   try{
