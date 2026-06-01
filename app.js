@@ -1315,15 +1315,25 @@ async function handleUpload(file,type){
   activeUploadPromise=null;
 }
 
-function downloadUpload(type){
-  const url = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
+async function downloadUpload(type){
+  const itemId = type==='thumb' ? thumbItemId : vidItemId;
+  const cachedUrl = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
+  if(!itemId && !cachedUrl){showToast('No file to download','error');return;}
   const name = document.getElementById('fName').value || 'file';
   const ext = type==='thumb' ? '.jpg' : '.mp4';
+  // Always fetch a fresh pre-auth URL — cached ones expire after ~1 hour
+  let url = cachedUrl;
+  if(itemId && !LOCAL_MODE){
+    try{
+      const meta = await apiCall(await boardItemPath(itemId));
+      url = meta['@microsoft.graph.downloadUrl'] || cachedUrl;
+      if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
+    }catch(e){}
+  }
   if(!url){showToast('No file to download','error');return;}
   const a = document.createElement('a');
   a.href = url;
   a.download = name+'-'+(type==='thumb'?'thumbnail':'video')+ext;
-  a.target = '_blank';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1384,12 +1394,16 @@ function removeCarouselImage(idx){
 async function downloadAllCarouselImages(){
   if(!carouselImages.length) return;
   for(let i=0;i<carouselImages.length;i++){
-    const url=carouselImages[i].downloadUrl||carouselImages[i].shareUrl;
+    const img=carouselImages[i];
+    // Fetch fresh pre-auth URL to avoid 1-hour expiry error on SharePoint
+    let url=img.downloadUrl||img.shareUrl;
+    if(img.itemId&&!LOCAL_MODE){
+      try{const m=await apiCall(await boardItemPath(img.itemId));url=m['@microsoft.graph.downloadUrl']||url;img.downloadUrl=url;}catch(e){}
+    }
     if(!url) continue;
     const a=document.createElement('a');
     a.href=url;
     a.download=`slide-${i+1}`;
-    a.target='_blank';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
