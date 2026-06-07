@@ -1,3 +1,4 @@
 .DS_Store
 credentials.txt
+firebase-credentials.txt
 .playwright-cli/

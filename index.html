@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Socieva — Content Board</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233b82f6'/%3E%3Cpath d='M18 21c0-4 3.3-7 8.8-7h19.4v8.1H27.4c-1.4 0-2.2.6-2.2 1.7 0 1 .8 1.5 2.5 1.9l10.9 2.4c5.6 1.2 8.4 4.5 8.4 9.6 0 5.8-4.5 10.3-12.1 10.3H18.6v-8.2h16.1c2 0 3-.7 3-2 0-1.1-.8-1.8-2.7-2.2l-10.6-2.3C20.1 32.4 18 29.2 18 25.1V21z' fill='white'/%3E%3C/svg%3E">
-<!-- MSAL removed: token via Cloudflare Worker (ROPC) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -46,8 +45,8 @@
     <div class="login-logo">Socieva Studio</div>
     <div class="login-title">Content Board</div>
     <div class="login-sub">Sign in to access the Capital.com Arabic production board.</div>
-    <label class="auth-label">Username</label>
-    <input class="auth-input" type="text" id="loginUsername" placeholder="your username" autocomplete="username" autocapitalize="none">
+    <label class="auth-label">Email / username</label>
+    <input class="auth-input" type="text" id="loginUsername" placeholder="you@example.com" autocomplete="username" autocapitalize="none">
     <label class="auth-label">Password</label>
     <input class="auth-input" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
     <div class="auth-error" id="loginError"></div>
@@ -258,7 +257,7 @@
         <select id="fApprove"><option value="">—</option></select></div>
     </div>
 
-    <div class="section-title">Files (uploaded to OneDrive)</div>
+    <div class="section-title">Files</div>
     <div class="field-grid">
       <div class="field" id="thumbUploadField">
         <label>Thumbnail / photos</label>
@@ -367,6 +366,16 @@
       <input class="settings-input" type="text" id="newCategoryName" placeholder="Category name">
       <button class="btn" id="addCategoryBtn">+ Add category</button>
     </div>
+
+    <!-- MIGRATION -->
+    <div class="section-title" id="migrationSectionTitle" style="display:none">Migration</div>
+    <div class="settings-help" id="migrationHelp" style="display:none">
+      Copy legacy OneDrive board data and files into Firebase. OneDrive data is kept as backup.
+    </div>
+    <div class="settings-add-row" id="migrationActions" style="display:none">
+      <button class="btn" id="migrateFirebaseBtn" type="button">Migrate OneDrive to Firebase</button>
+    </div>
+    <div class="upload-status" id="migrationStatus" style="text-align:left;margin-top:8px"></div>
   </div>
   <div class="modal-footer">
     <button class="btn" id="cancelSettingsBtn">Cancel</button>
@@ -375,7 +384,10 @@
 </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-storage-compat.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
-

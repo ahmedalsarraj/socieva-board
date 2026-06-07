@@ -1,75 +1,112 @@
-# Socieva Content Board
+# Content Board
 
-Content planning and tracking board for Capital.com Arabic video production.
-Live at **[board.socievastudio.com](https://board.socievastudio.com)**.
+Internal content planning board for Capital.com Arabic production.
 
----
+Live domain:
+`board.socievastudio.com`
 
 ## Architecture
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | `index.html` + `styles.css` + `app.js` (no build step) |
-| Auth / token | Cloudflare Worker — client_credentials flow, exposes `/token` endpoint |
-| Storage | Microsoft OneDrive via Graph API (Application permissions) |
-| Hosting | GitHub Pages from `main` branch |
+| --- | --- |
+| Frontend | Static `index.html`, `styles.css`, `app.js` |
+| Hosting | GitHub Pages |
+| Auth | Firebase Authentication, Email/Password |
+| Database | Cloud Firestore |
+| File storage | Firebase Storage |
+| Legacy fallback | OneDrive / Microsoft Graph remains in code for migration and rollback |
 
-### File structure
+No build step is required.
 
+## Firebase Project
+
+Project ID:
+`content-board-capital`
+
+Storage bucket:
+`content-board-capital.firebasestorage.app`
+
+Main Firestore documents:
+
+| Path | Purpose |
+| --- | --- |
+| `board/videos` | Video board cards and settings |
+| `board/carousels` | Carousel board cards |
+| `users/{uid}` | User profile, role, and active flag |
+
+Storage paths:
+
+| Path | Purpose |
+| --- | --- |
+| `uploads/thumbnails/` | Thumbnail and carousel image uploads |
+| `uploads/videos/` | Final video uploads |
+| `system/` | Reserved for admin/system files |
+
+## Users And Roles
+
+Users must exist in both Firebase Authentication and Firestore.
+
+1. Create the login account in Firebase Authentication.
+2. Copy the Firebase Auth UID.
+3. Create a Firestore document at `users/{uid}`.
+
+Example:
+
+```js
+{
+  email: "user@example.com",
+  displayName: "User Name",
+  role: "user",
+  active: true
+}
 ```
-socieva-board-main/
-├── index.html    # HTML skeleton (381 lines — head + body structure only)
-├── styles.css    # All CSS (304 lines)
-├── app.js        # All JS logic (1709 lines)
-├── CNAME         # board.socievastudio.com
-└── README.md
+
+Roles:
+
+| Role | Capabilities |
+| --- | --- |
+| `admin` | Manage board, settings, reports, roles, and active users |
+| `user` | Use the board and upload/download files |
+
+Set `active: false` to disable access without deleting the Firebase Auth account.
+
+Adding new users is done from Firebase Console. Role changes can be done either from Firebase Console or from board Settings by an admin.
+
+## Local Development
+
+Start a local static server:
+
+```bash
+python3 -m http.server 4173
 ```
 
-### Data files on OneDrive
+Open:
 
-| File | Purpose |
-|------|---------|
-| `Socieva-Board/board-data.json` | Videos board cards + settings |
-| `Socieva-Board/carousels-data.json` | Carousels board cards |
-| `Socieva-Board/users.json` | User accounts + roles |
-| `Socieva-Board/thumbnails/` | Uploaded thumbnail images |
-| `Socieva-Board/videos/` | Uploaded video files |
-| `Socieva-Board/carousels/` | Carousel slide images |
+```text
+http://localhost:4173
+```
 
-> **Note:** The OneDrive folder name is `Socieva-Board` (with a hyphen), matching `FOLDER_NAME` in `app.js`.
+Firebase Auth must allow `localhost` as an authorized domain. Firebase usually includes it by default.
 
----
+### Local Mode
 
-## Local development
+Local mode bypasses Firebase and OneDrive, and stores test data in `localStorage`.
 
-No build required. Open `index.html` directly in any browser.
-
-### Enable local mode
-
-Local mode bypasses OneDrive entirely and stores everything in `localStorage`.
-Activate it by running this once in the browser console:
+Enable:
 
 ```js
 localStorage.setItem('sb_local_mode', '1');
 location.reload();
 ```
 
-Deactivate with:
+Disable:
 
 ```js
 localStorage.removeItem('sb_local_mode');
 location.reload();
 ```
 
-`LOCAL_MODE` is **not** a hardcoded constant — it is read from localStorage on every page load:
-
-```js
-// app.js — line 12
-const LOCAL_MODE_KEY = 'sb_local_mode';
-const LOCAL_MODE = localStorage.getItem(LOCAL_MODE_KEY) === '1';
-```
-
-### Reset local data
+Reset local test data:
 
 ```js
 Object.keys(localStorage)
@@ -78,97 +115,70 @@ Object.keys(localStorage)
 location.reload();
 ```
 
----
+## Storage Provider Switch
 
-## Production deployment
+Firebase is the default provider.
 
-### Prerequisites
+To force legacy OneDrive fallback in a browser:
 
-- Cloudflare Worker deployed with URL set as `TOKEN_WORKER_URL` in `app.js`.
-- Microsoft Entra app registration with:
-  - `Files.ReadWrite.All` (Application permission, admin-consented)
-  - `Sites.ReadWrite.All` (Application permission, admin-consented)
-- `sb_local_mode` **not** set in the browser's localStorage.
-
-### Deploy
-
-```bash
-git add index.html styles.css app.js
-git commit -m "your change"
-git push origin main
-# GitHub Pages auto-deploys in ~30 seconds
+```js
+localStorage.setItem('sb_storage_provider', 'onedrive');
+location.reload();
 ```
 
----
+To return to Firebase:
 
-## Key constants (in app.js)
+```js
+localStorage.removeItem('sb_storage_provider');
+location.reload();
+```
 
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `LOCAL_MODE_KEY` | `'sb_local_mode'` | localStorage key for local-mode toggle |
-| `TOKEN_WORKER_URL` | Cloudflare Worker URL | Issues Graph access tokens |
-| `FOLDER_NAME` | `'Socieva-Board'` | Root folder name on OneDrive |
-| `DATA_FILE` | `'board-data.json'` | Videos board data filename |
-| `CAROUSELS_FILE` | `'carousels-data.json'` | Carousels board data filename |
-| `USERS_FILE` | `'users.json'` | User accounts filename |
-| `DISPLAY_URL_TTL_MS` | `45 min` | How long file preview URLs stay fresh before re-fetching |
-| `CARD_COLLAPSE_LIMIT` | `3` | Cards per column before "Show more" appears |
-| `SESSION_KEY` | `'sb_session_v2'` | localStorage key for the active session |
-| `SESSION_DURATION_MS` | `7 days` | Session lifetime before auto-logout |
+## Deploy
 
----
+GitHub Pages deploys from `main`.
 
-## Board modes
+```bash
+git add index.html styles.css app.js README.md
+git commit -m "Connect board to Firebase"
+git push origin main
+```
 
-| Mode | Stages | Data file |
-|------|--------|-----------|
-| Videos | Script → Recording → Under editing → Ready to post → Posted | `board-data.json` |
-| Carousels | Script → Working on → Ready to post → Posted | `carousels-data.json` |
+After deploy, confirm Firebase Authentication authorized domains include:
 
----
+```text
+board.socievastudio.com
+```
 
-## Roles
+Firebase Console path:
+Authentication -> Settings -> Authorized domains
 
-| Role | Capabilities |
-|------|-------------|
-| `admin` | Full access: add/edit/delete cards, manage users, view reports, change settings |
-| `user` | Add/edit cards, upload files, view reports |
+## Smoke Test
 
-> Role enforcement is UI-side only. Backend enforcement (Worker/API proxy) is planned for a later phase.
+Run this after deployment:
 
----
+- Login as admin.
+- Open Settings and confirm users/roles are visible.
+- Login as a normal user in another browser/incognito window.
+- Confirm normal user cannot see Settings.
+- Create a new video card.
+- Upload a small thumbnail.
+- Save the card.
+- Confirm Firestore has `board/videos`.
+- Confirm Storage has a file under `uploads/thumbnails/`.
+- Download the uploaded thumbnail from the board.
+- Switch to Carousels and back to Videos.
+- Confirm Reports opens and counts render.
 
-## Performance notes
+## Migration Status
 
-- **Non-blocking load**: board renders immediately after `loadData()`; OneDrive preview URLs refresh in background via `refreshDisplayUrls()`.
-- **URL TTL**: each card's display URL is only re-fetched after 45 minutes (`DISPLAY_URL_TTL_MS`).
-- **Concurrency cap**: Graph requests are capped at 5 parallel calls via `mapLimit(arr, 5, fn)`.
-- **ETag protection**: `saveData()` sends `If-Match: <eTag>` so concurrent saves by two users return HTTP 412 instead of silently overwriting each other.
-- **Auto-refresh**: board data re-fetches every 2 minutes; re-renders only if content changed (snapshot comparison).
-- **Debounce**: search, channel, and segment filter inputs are debounced at 200 ms.
+New data and new uploads use Firebase.
 
----
+Existing OneDrive files are not migrated automatically. A migration tool is still needed to:
 
-## Smoke test checklist
+1. Read legacy OneDrive board data.
+2. Download each legacy file.
+3. Upload it to Firebase Storage.
+4. Rewrite card file references.
+5. Save the migrated cards to Firestore.
 
-Run after any significant change before pushing to production.
-
-- [ ] Login with valid credentials
-- [ ] Login fails gracefully with wrong password
-- [ ] First-login password change flow works
-- [ ] Add new Video card, fill all fields, save
-- [ ] Edit card, change stage via drag-and-drop
-- [ ] Delete card → Undo restores it
-- [ ] Stage filter pill filters correctly
-- [ ] Search input filters by name / channel / script
-- [ ] Switch to Carousels board — Videos cards do not appear
-- [ ] Switch back to Videos board — Carousels cards do not appear
-- [ ] Upload thumbnail image → preview appears on card
-- [ ] Download thumbnail button works
-- [ ] Remove thumbnail → card shows empty placeholder
-- [ ] Upload video → play button appears on card
-- [ ] Carousel: upload multiple slides, Download all works
-- [ ] Report modal shows correct counts and percentages
-- [ ] Period filter (Today / This week / This month) returns correct subset
-- [ ] CSV export downloads a valid file
-- [ ] Board auto-refreshes after 2 minutes without page reload
+Do not delete OneDrive data until migration is verified.

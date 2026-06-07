@@ -10,6 +10,18 @@ const SHARED_BOARD_FOLDER_URL = 'https://socievastudio-my.sharepoint.com/:f:/g/p
 
 const LOCAL_MODE_KEY = 'sb_local_mode';
 const LOCAL_MODE = localStorage.getItem(LOCAL_MODE_KEY) === '1';
+const STORAGE_PROVIDER_KEY = 'sb_storage_provider';
+const STORAGE_PROVIDER = localStorage.getItem(STORAGE_PROVIDER_KEY) || 'firebase';
+const USE_FIREBASE = !LOCAL_MODE && STORAGE_PROVIDER === 'firebase';
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyDNef6o6VhoaPf5Og2fmxwgRTRh7ydNmuc',
+  authDomain: 'content-board-capital.firebaseapp.com',
+  projectId: 'content-board-capital',
+  storageBucket: 'content-board-capital.firebasestorage.app',
+  messagingSenderId: '459037063501',
+  appId: '1:459037063501:web:03ccaf4edb89cf3ab31f04',
+  measurementId: 'G-2GYX7Y5M2T'
+};
 
 const SEED_USERNAMES = ['majd','jamal','shamma','osaid','ahmed','aya','nawal','sara','mustafa'];
 const ADMIN_USERNAMES = ['ahmed','sara'];
@@ -71,6 +83,10 @@ let carouselLoaded = false;
 let lastETag = {videos:'',carousels:''};
 let transferGen = 0; // incremented on every resetModal() to cancel stale async callbacks
 let activeUploadPromise = null; // set while an upload is in-flight; save waits for it
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDb = null;
+let firebaseStorage = null;
 
 // ========== CONSTANTS ==========
 const STAGES          = ['Script','Recording','Under editing','Ready to post','Posted'];
@@ -99,6 +115,112 @@ function jsArg(s){return escHtml(JSON.stringify(String(s??'')))}
 function norm(s){return String(s||'').trim().toLowerCase()}
 function pathPart(s){return encodeURIComponent(String(s))}
 function drivePath(...parts){return parts.map(pathPart).join('/')}
+function storageLabel(){return STORAGE_PROVIDER === 'firebase' ? 'Firebase' : 'OneDrive'}
+
+// ========== FIREBASE BACKEND ==========
+function initFirebaseBackend(){
+  if(firebaseApp)return;
+  if(typeof firebase === 'undefined')throw new Error('Firebase SDK failed to load.');
+  firebaseApp=firebase.initializeApp(FIREBASE_CONFIG);
+  firebaseAuth=firebase.auth();
+  firebaseDb=firebase.firestore();
+  firebaseStorage=firebase.storage();
+}
+
+function firebaseBoardDoc(){return boardMode==='carousels'?'carousels':'videos'}
+function firebaseUserFromDoc(doc){
+  const data=doc.data()||{};
+  return {
+    id:doc.id,
+    username:data.displayName||data.email||doc.id,
+    email:data.email||'',
+    role:data.role||'user',
+    active:data.active===true,
+    mustChangePassword:false,
+    createdAt:data.createdAt||''
+  };
+}
+
+async function firebaseCurrentUser(){
+  initFirebaseBackend();
+  if(firebaseAuth.currentUser)return firebaseAuth.currentUser;
+  return new Promise(resolve=>{
+    const unsub=firebaseAuth.onAuthStateChanged(user=>{unsub();resolve(user||null);});
+  });
+}
+
+async function firebaseSessionFromAuthUser(authUser){
+  if(!authUser)return null;
+  const doc=await firebaseDb.collection('users').doc(authUser.uid).get();
+  if(!doc.exists)throw new Error('Your account is not enabled for this board.');
+  const user=firebaseUserFromDoc(doc);
+  if(!user.active)throw new Error('Your account is disabled.');
+  return {
+    userId:authUser.uid,
+    username:user.username,
+    email:user.email||authUser.email||'',
+    role:user.role,
+    expiresAt:Date.now()+SESSION_DURATION_MS
+  };
+}
+
+async function firebaseLoadUsers(){
+  initFirebaseBackend();
+  if(currentSession?.role!=='admin'&&firebaseAuth.currentUser){
+    const doc=await firebaseDb.collection('users').doc(firebaseAuth.currentUser.uid).get();
+    boardUsers=doc.exists?[firebaseUserFromDoc(doc)]:[];
+    return true;
+  }
+  const snap=await firebaseDb.collection('users').get();
+  boardUsers=snap.docs.map(firebaseUserFromDoc).filter(u=>u.active!==false);
+  return true;
+}
+
+async function firebaseSaveUsers(){
+  initFirebaseBackend();
+  const batch=firebaseDb.batch();
+  boardUsers.forEach(u=>{
+    batch.set(firebaseDb.collection('users').doc(u.id),{
+      email:u.email||'',
+      displayName:u.username||u.email||'',
+      role:u.role||'user',
+      active:u.active!==false
+    },{merge:true});
+  });
+  await batch.commit();
+}
+
+async function firebaseUploadFileWithProgress(file,subfolder,onProgress){
+  return firebaseUploadBlobWithProgress(file,file.name,subfolder,onProgress,file.type);
+}
+
+async function firebaseUploadBlobWithProgress(blob,filename,subfolder,onProgress,contentType){
+  initFirebaseBackend();
+  const safeName=String(filename||'file').replace(/[^\w.\-]+/g,'_').slice(-140)||'file';
+  const path=`uploads/${subfolder}/${Date.now()}_${uid()}_${safeName}`;
+  const ref=firebaseStorage.ref(path);
+  const task=ref.put(blob,{contentType:contentType||blob.type||'application/octet-stream'});
+  const snap=await new Promise((resolve,reject)=>{
+    task.on('state_changed',s=>{
+      if(s.totalBytes)onProgress?.(Math.max(1,Math.round((s.bytesTransferred/s.totalBytes)*100)));
+    },reject,()=>resolve(task.snapshot));
+  });
+  const downloadUrl=await snap.ref.getDownloadURL();
+  onProgress?.(100);
+  return{shareUrl:downloadUrl,itemId:path,downloadUrl};
+}
+
+async function firebaseDeleteFile(path){
+  if(!path)return;
+  initFirebaseBackend();
+  await firebaseStorage.ref(path).delete();
+}
+
+async function firebaseRefreshDownloadUrl(path){
+  if(!path)return null;
+  initFirebaseBackend();
+  return firebaseStorage.ref(path).getDownloadURL();
+}
 
 // ========== LOCAL STORAGE BACKEND ==========
 function lsSet(key, data){ localStorage.setItem('sb_data_'+key, JSON.stringify(data)); }
@@ -141,6 +263,7 @@ async function loadUsers() {
     try{ const data=lsGet(USERS_FILE); boardUsers=Array.isArray(data.users)?data.users:[]; return true; }
     catch(e){ if(e.status!==404)throw e; return false; }
   }
+  if(USE_FIREBASE)return firebaseLoadUsers();
   try {
     const meta = await apiCall(await boardPath(USERS_FILE));
     const blob = await apiCall(await boardItemContentPath(meta.id), undefined, null, true);
@@ -155,6 +278,7 @@ async function loadUsers() {
 
 async function saveUsers() {
   if(LOCAL_MODE){ lsSet(USERS_FILE,{version:1,users:boardUsers}); return; }
+  if(USE_FIREBASE)return firebaseSaveUsers();
   const json = JSON.stringify({version:1, users:boardUsers}, null, 2);
   await apiCall(`${await boardPath(USERS_FILE)}:/content`, 'PUT', new Blob([json],{type:'application/json'}));
 }
@@ -173,6 +297,12 @@ async function bootstrapUsers() {
 }
 
 async function validateCredentials(username, password) {
+  if(USE_FIREBASE){
+    initFirebaseBackend();
+    const credential=await firebaseAuth.signInWithEmailAndPassword(username, password);
+    const session=await firebaseSessionFromAuthUser(credential.user);
+    return {id:session.userId,username:session.username,email:session.email,role:session.role,mustChangePassword:false,_session:session};
+  }
   const user = boardUsers.find(u => u.username.toLowerCase() === username.toLowerCase());
   if (!user) return null;
   const hash = await hashPassword(password, user.salt);
@@ -209,7 +339,7 @@ async function doLogin() {
       showScreen('changePwScreen');
       return;
     }
-    const session = {userId:user.id, username:user.username, role:user.role, expiresAt:Date.now()+SESSION_DURATION_MS};
+    const session = user._session || {userId:user.id, username:user.username, role:user.role, expiresAt:Date.now()+SESSION_DURATION_MS};
     saveSession(session);
     await startBoardApp(session);
   } catch(e) { errEl.textContent = 'Error: ' + e.message; }
@@ -242,7 +372,10 @@ async function doChangePassword() {
   btn.disabled = false; btn.textContent = 'Set password & continue';
 }
 
-function doLogout() {
+async function doLogout() {
+  if(USE_FIREBASE&&firebaseAuth){
+    try{await firebaseAuth.signOut();}catch(e){}
+  }
   clearSession();
   document.getElementById('loginUsername').value = '';
   document.getElementById('loginPassword').value = '';
@@ -311,6 +444,7 @@ async function apiCall(url,method='GET',body=null,isBlob=false,extraHeaders={}){
 }
 
 async function ensureFolder(){
+  if(USE_FIREBASE)return;
   if(LOCAL_MODE)return;
   if(hasSharedBoardFolder()){await getBoardRoot();return;}
   try{await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME)}`);}
@@ -322,6 +456,7 @@ async function ensureFolder(){
 
 const _ensuredSubfolders=new Set();
 async function ensureSubfolder(name){
+  if(USE_FIREBASE)return;
   if(LOCAL_MODE)return;
   if(_ensuredSubfolders.has(name))return;
   await ensureFolder();
@@ -347,6 +482,29 @@ async function init(){
       const user=boardUsers.find(u=>u.id===session.userId);
       if(user&&!user.mustChangePassword){session.role=user.role;saveSession(session);await startBoardApp(session);return;}
     }
+    showScreen('loginScreen');
+    return;
+  }
+
+  if(USE_FIREBASE){
+    setLoading(20);
+    try{
+      initFirebaseBackend();
+      const authUser=await firebaseCurrentUser();
+      setLoading(60);
+      if(authUser){
+        const session=await firebaseSessionFromAuthUser(authUser);
+        saveSession(session);
+        await loadUsers();
+        setLoading(100);setTimeout(()=>setLoading(0),400);
+        await startBoardApp(session);
+        return;
+      }
+    }catch(e){
+      showToast('Firebase connection failed: '+e.message,'error');
+      setLoading(0);
+    }
+    setLoading(100);setTimeout(()=>setLoading(0),400);
     showScreen('loginScreen');
     return;
   }
@@ -383,6 +541,7 @@ async function startBoardApp(session){
   setLoading(30);
   try{
     await ensureFolder();
+    if(USE_FIREBASE)await loadUsers();
     await loadData();
     setLoading(80);
   }catch(e){showToast('Board load error: '+e.message,'error');setLoading(0);}
@@ -445,6 +604,19 @@ async function loadData(){
     }
     return;
   }
+  if(USE_FIREBASE){
+    const doc=await firebaseDb.collection('board').doc(firebaseBoardDoc()).get();
+    const data=doc.exists?doc.data():null;
+    if(boardMode==='carousels'){
+      cards=Array.isArray(data?.cards)?data.cards:[];
+    }else if(data){
+      parseBoardData(data);
+    }else{
+      cards=[];
+      boardSettings=defaultSettings();
+    }
+    return;
+  }
   if(boardMode==='carousels'){
     try{
       const meta=await apiCall(await boardPath(CAROUSELS_FILE));
@@ -501,12 +673,356 @@ async function saveData(){
     lsSet(file,payload);
     return;
   }
+  if(USE_FIREBASE){
+    const payload=boardMode==='carousels'?{version:1,cards}:buildBoardPayload();
+    await firebaseDb.collection('board').doc(firebaseBoardDoc()).set({
+      ...payload,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy:currentSession?.userId||null
+    },{merge:false});
+    return;
+  }
   if(boardMode==='carousels'){
     const json=JSON.stringify({version:1,cards},null,2);
     await putWithETag(CAROUSELS_FILE,new Blob([json],{type:'application/json'}),'carousels');
     return;
   }
   await putWithETag(DATA_FILE,new Blob([JSON.stringify(buildBoardPayload(),null,2)],{type:'application/json'}),'videos');
+}
+
+// ========== ONEDRIVE -> FIREBASE MIGRATION ==========
+function setMigrationStatus(message,type=''){
+  const el=document.getElementById('migrationStatus');
+  if(!el)return;
+  el.className='upload-status '+type;
+  el.style.whiteSpace='pre-line';
+  el.textContent=message||'';
+}
+
+function toggleMigrationUi(){
+  const visible=!!(USE_FIREBASE&&canManageSettings());
+  ['migrationSectionTitle','migrationHelp','migrationActions'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display=visible?'':'none';
+  });
+}
+
+function migrationFileName(card,label,fallbackExt){
+  const base=String(card?.name||card?.id||label||'file').trim().replace(/[^\w.\-]+/g,'_').slice(0,80)||'file';
+  const ext=String(fallbackExt||'').startsWith('.')?fallbackExt:'.bin';
+  return `${base}-${label}${ext}`;
+}
+
+function extensionFromBlob(blob,fallback){
+  const type=String(blob?.type||'').toLowerCase();
+  if(type.includes('png'))return'.png';
+  if(type.includes('webp'))return'.webp';
+  if(type.includes('gif'))return'.gif';
+  if(type.includes('jpeg')||type.includes('jpg'))return'.jpg';
+  if(type.includes('quicktime'))return'.mov';
+  if(type.includes('mp4'))return'.mp4';
+  return fallback;
+}
+
+function isFirebaseFileRef(itemId,url){
+  return String(itemId||'').startsWith('uploads/') || String(url||'').includes('firebasestorage.app') || String(url||'').includes('firebasestorage.googleapis.com');
+}
+
+async function loadOneDriveBoardPayload(mode){
+  const file=mode==='carousels'?CAROUSELS_FILE:DATA_FILE;
+  try{
+    const meta=await apiCall(await boardPath(file));
+    const blob=await apiCall(await boardItemContentPath(meta.id),undefined,null,true);
+    const data=JSON.parse(await blob.text());
+    if(mode==='carousels')return{version:1,cards:Array.isArray(data?.cards)?data.cards:[]};
+    if(Array.isArray(data))return{version:2,settings:defaultSettings(),cards:data};
+    return{version:2,settings:normalizeSettings(data?.settings),cards:Array.isArray(data?.cards)?data.cards:[]};
+  }catch(e){
+    if(e.status!==404)throw e;
+    // 404 just means this board file never existed on OneDrive — treat as "nothing to migrate", not a hard failure
+    if(mode==='carousels')return{version:1,cards:[]};
+    try{
+      const meta=await apiCall(`/me/drive/root:/${drivePath(FOLDER_NAME,DATA_FILE)}`);
+      const blob=await apiCall(`/me/drive/items/${meta.id}/content`,undefined,null,true);
+      const data=JSON.parse(await blob.text());
+      if(Array.isArray(data))return{version:2,settings:defaultSettings(),cards:data};
+      return{version:2,settings:normalizeSettings(data?.settings),cards:Array.isArray(data?.cards)?data.cards:[]};
+    }catch(inner){
+      if(inner.status===404)return{version:2,settings:defaultSettings(),cards:[]};
+      throw inner;
+    }
+  }
+}
+
+async function oneDriveDownloadUrl(itemId,shareUrl,cachedUrl){
+  if(itemId){
+    try{
+      const meta=await apiCall(await boardItemPath(itemId));
+      if(meta?.['@microsoft.graph.downloadUrl'])return meta['@microsoft.graph.downloadUrl'];
+    }catch(e){}
+  }
+  if(shareUrl){
+    try{
+      const meta=await apiCall(`/shares/${encodeSharingUrl(shareUrl)}/driveItem`);
+      const item=meta.remoteItem||meta;
+      const url=(meta.remoteItem&&meta.remoteItem['@microsoft.graph.downloadUrl'])||meta['@microsoft.graph.downloadUrl']||item?.['@microsoft.graph.downloadUrl'];
+      if(url)return url;
+    }catch(e){}
+  }
+  if(cachedUrl)return cachedUrl;
+  throw new Error('Could not resolve OneDrive download URL.');
+}
+
+async function oneDriveFileBlob(itemId,shareUrl,cachedUrl){
+  if(itemId){
+    try{return await apiCall(await boardItemContentPath(itemId),undefined,null,true);}
+    catch(e){}
+  }
+  const url=await oneDriveDownloadUrl(itemId,shareUrl,cachedUrl);
+  return fetchBlobWithProgress(url);
+}
+
+async function migrateOneDriveFile(ref,subfolder,card,label,fallbackExt,onProgress){
+  const itemId=ref?.itemId||null;
+  const shareUrl=ref?.shareUrl||null;
+  const cachedUrl=ref?.downloadUrl||null;
+  if(!itemId&&!shareUrl&&!cachedUrl)return null;
+  if(isFirebaseFileRef(itemId,shareUrl||cachedUrl))return ref;
+  const blob=await oneDriveFileBlob(itemId,shareUrl,cachedUrl);
+  const ext=extensionFromBlob(blob,fallbackExt);
+  const filename=migrationFileName(card,label,ext);
+  return firebaseUploadBlobWithProgress(blob,filename,subfolder,onProgress,blob.type);
+}
+
+async function migrateCardFiles(card,mode,state,existingCard=null){
+  const migrated={...card};
+  const cardLabel=card.name||card.id||`${mode} card`;
+  // Wrap each file copy so a single broken/expired OneDrive reference can NEVER block
+  // the card itself from being saved — the ticket survives even if its media doesn't.
+  const safeMigrate=async(ref,subfolder,label,fallbackExt,onProgress)=>{
+    try{
+      return await migrateOneDriveFile(ref,subfolder,migrated,label,fallbackExt,onProgress);
+    }catch(e){
+      state.failures.push(`${cardLabel} — ${label}: ${e.message}`);
+      return null; // keep the existing (OneDrive) reference; card data is unaffected
+    }
+  };
+  if(!(mode==='carousels'&&Array.isArray(migrated.images)&&migrated.images.length)&&(migrated.thumbItemId||migrated.thumbUrl||migrated.thumbDisplayUrl)){
+    const existingThumb=mediaRefFromCard(existingCard,'thumb');
+    if(hasFirebaseMedia(existingThumb)){
+      applyMediaRefToCard(migrated,'thumb',existingThumb);
+    }else{
+    setMigrationStatus(`Migrating ${state.done+1}/${state.total}: ${cardLabel} thumbnail`);
+    const result=await safeMigrate({
+      itemId:migrated.thumbItemId,
+      shareUrl:migrated.thumbUrl,
+      downloadUrl:migrated.thumbDisplayUrl
+    },'thumbnails','thumbnail','.jpg',pct=>setMigrationStatus(`Migrating ${cardLabel} thumbnail${typeof pct==='number'?` ${pct}%`:''}`));
+    if(result){
+      migrated.thumbUrl=result.shareUrl;
+      migrated.thumbItemId=result.itemId;
+      migrated.thumbDisplayUrl=result.downloadUrl;
+    }
+    state.done++;
+    }
+  }
+  if(mode==='videos'&&(migrated.vidItemId||migrated.vidUrl||migrated.vidDisplayUrl)){
+    const existingVid=mediaRefFromCard(existingCard,'vid');
+    if(hasFirebaseMedia(existingVid)){
+      applyMediaRefToCard(migrated,'vid',existingVid);
+    }else{
+    setMigrationStatus(`Migrating ${state.done+1}/${state.total}: ${cardLabel} video`);
+    const result=await safeMigrate({
+      itemId:migrated.vidItemId,
+      shareUrl:migrated.vidUrl,
+      downloadUrl:migrated.vidDisplayUrl
+    },'videos','video','.mp4',pct=>setMigrationStatus(`Migrating ${cardLabel} video${typeof pct==='number'?` ${pct}%`:''}`));
+    if(result){
+      migrated.vidUrl=result.shareUrl;
+      migrated.vidItemId=result.itemId;
+      migrated.vidDisplayUrl=result.downloadUrl;
+    }
+    state.done++;
+    }
+  }
+  if(Array.isArray(migrated.images)&&migrated.images.length){
+    const images=[];
+    const existingImages=Array.isArray(existingCard?.images)?existingCard.images:[];
+    for(let i=0;i<migrated.images.length;i++){
+      const img=migrated.images[i];
+      if(img.itemId||img.shareUrl||img.downloadUrl){
+        if(hasFirebaseMedia(existingImages[i])){
+          images.push(existingImages[i]);
+          continue;
+        }
+        setMigrationStatus(`Migrating ${state.done+1}/${state.total}: ${cardLabel} slide ${i+1}`);
+        const result=await safeMigrate(img,'thumbnails',`slide-${i+1}`,'.jpg',pct=>setMigrationStatus(`Migrating ${cardLabel} slide ${i+1}${typeof pct==='number'?` ${pct}%`:''}`));
+        images.push(result?{shareUrl:result.shareUrl,itemId:result.itemId,downloadUrl:result.downloadUrl}:img);
+        state.done++;
+      }else images.push(img);
+    }
+    migrated.images=images;
+    if(mode==='carousels'&&images.length){
+      migrated.thumbUrl=images[0].shareUrl||migrated.thumbUrl||null;
+      migrated.thumbItemId=images[0].itemId||migrated.thumbItemId||null;
+      migrated.thumbDisplayUrl=images[0].downloadUrl||migrated.thumbDisplayUrl||null;
+    }
+  }
+  return migrated;
+}
+
+function countMigratableFiles(payload,mode,existingMap=new Map()){
+  return (payload.cards||[]).reduce((total,c)=>{
+    const existing=existingMap.get(c.id)||null;
+    let n=0;
+    if(!(mode==='carousels'&&Array.isArray(c.images)&&c.images.length)&&(c.thumbItemId||c.thumbUrl||c.thumbDisplayUrl)&&!hasFirebaseMedia(mediaRefFromCard(existing,'thumb')))n++;
+    if(mode==='videos'&&(c.vidItemId||c.vidUrl||c.vidDisplayUrl)&&!hasFirebaseMedia(mediaRefFromCard(existing,'vid')))n++;
+    if(Array.isArray(c.images)){
+      const existingImages=Array.isArray(existing?.images)?existing.images:[];
+      n+=c.images.filter((img,i)=>(img.itemId||img.shareUrl||img.downloadUrl)&&!hasFirebaseMedia(existingImages[i])).length;
+    }
+    return total+n;
+  },0);
+}
+
+function hasFirebaseMedia(ref){
+  return isFirebaseFileRef(ref?.itemId,ref?.shareUrl||ref?.downloadUrl);
+}
+
+function mediaRefFromCard(card,prefix){
+  return {
+    itemId:card?.[`${prefix}ItemId`]||null,
+    shareUrl:card?.[`${prefix}Url`]||null,
+    downloadUrl:card?.[`${prefix}DisplayUrl`]||null
+  };
+}
+
+function applyMediaRefToCard(card,prefix,ref){
+  card[`${prefix}ItemId`]=ref.itemId||null;
+  card[`${prefix}Url`]=ref.shareUrl||null;
+  card[`${prefix}DisplayUrl`]=ref.downloadUrl||null;
+}
+
+function mergeExistingCardMedia(existingCard,migratedCard){
+  const merged={...existingCard};
+  let changed=false;
+  ['thumb','vid'].forEach(prefix=>{
+    const current=mediaRefFromCard(merged,prefix);
+    const incoming=mediaRefFromCard(migratedCard,prefix);
+    if(!hasFirebaseMedia(current)&&hasFirebaseMedia(incoming)){
+      applyMediaRefToCard(merged,prefix,incoming);
+      changed=true;
+    }
+  });
+  if(Array.isArray(migratedCard.images)&&migratedCard.images.length){
+    const currentImages=Array.isArray(merged.images)?merged.images:[];
+    const max=Math.max(currentImages.length,migratedCard.images.length);
+    const images=[];
+    for(let i=0;i<max;i++){
+      const current=currentImages[i]||null;
+      const incoming=migratedCard.images[i]||null;
+      if((!current||!hasFirebaseMedia(current))&&hasFirebaseMedia(incoming)){
+        images[i]={shareUrl:incoming.shareUrl||null,itemId:incoming.itemId||null,downloadUrl:incoming.downloadUrl||null};
+        changed=true;
+      }else if(current)images[i]=current;
+      else if(incoming)images[i]=incoming;
+    }
+    merged.images=images.filter(Boolean);
+    if(merged.images.length&&!hasFirebaseMedia(mediaRefFromCard(merged,'thumb'))&&hasFirebaseMedia(merged.images[0])){
+      applyMediaRefToCard(merged,'thumb',merged.images[0]);
+      changed=true;
+    }
+  }
+  return{card:merged,changed};
+}
+
+// Merge OneDrive-sourced cards into whatever already exists in Firebase, matched by id.
+// Existing Firebase text/status fields are never overwritten. On re-run, only media refs
+// still pointing to OneDrive can be replaced with freshly migrated Firebase refs.
+function mergeMigratedCards(existingCards,migratedCards){
+  const existing=Array.isArray(existingCards)?existingCards:[];
+  const incoming=Array.isArray(migratedCards)?migratedCards:[];
+  const incomingById=new Map(incoming.map(c=>[c.id,c]));
+  let updatedMedia=0;
+  const merged=existing.map(card=>{
+    const migrated=incomingById.get(card.id);
+    if(!migrated)return card;
+    const result=mergeExistingCardMedia(card,migrated);
+    if(result.changed)updatedMedia++;
+    incomingById.delete(card.id);
+    return result.card;
+  });
+  const additions=[...incomingById.values()];
+  return{merged:[...merged,...additions],added:additions.length,skipped:incoming.length-additions.length,updatedMedia};
+}
+
+async function runOneDriveFirebaseMigration(){
+  if(!USE_FIREBASE||!canManageSettings())return;
+  if(!confirm('Migrate legacy OneDrive tickets and files into Firebase?\n\nTickets are matched by ID. Existing Firebase text/status fields are kept, while missing/legacy media links can be updated to Firebase Storage links. OneDrive itself will not be modified or deleted.\n\nContinue?'))return;
+  const btn=document.getElementById('migrateFirebaseBtn');
+  if(btn){btn.disabled=true;btn.textContent='Migrating...';}
+  try{
+    setLoading(15);
+    setMigrationStatus('Loading OneDrive board data...');
+    const videoPayload=await loadOneDriveBoardPayload('videos');
+    const carouselPayload=await loadOneDriveBoardPayload('carousels');
+    const existingVideoDoc=(await firebaseDb.collection('board').doc('videos').get()).data()||{};
+    const existingCarouselDoc=(await firebaseDb.collection('board').doc('carousels').get()).data()||{};
+    const existingVideoMap=new Map((existingVideoDoc.cards||[]).map(c=>[c.id,c]));
+    const existingCarouselMap=new Map((existingCarouselDoc.cards||[]).map(c=>[c.id,c]));
+    // failures collects file-copy issues — these NEVER stop a ticket from being saved;
+    // at worst a ticket keeps pointing at its old OneDrive file (which may break once OneDrive is removed).
+    const state={done:0,total:countMigratableFiles(videoPayload,'videos',existingVideoMap)+countMigratableFiles(carouselPayload,'carousels',existingCarouselMap),failures:[]};
+    setLoading(30);
+    const migratedVideos=[];
+    for(const card of videoPayload.cards||[]){
+      migratedVideos.push(await migrateCardFiles(card,'videos',state,existingVideoMap.get(card.id)||null));
+    }
+    const migratedCarousels=[];
+    for(const card of carouselPayload.cards||[]){
+      migratedCarousels.push(await migrateCardFiles(card,'carousels',state,existingCarouselMap.get(card.id)||null));
+    }
+    setMigrationStatus('Merging with existing Firebase data...');
+    const videoMerge=mergeMigratedCards(existingVideoDoc.cards,migratedVideos);
+    const carouselMerge=mergeMigratedCards(existingCarouselDoc.cards,migratedCarousels);
+    setMigrationStatus('Saving merged data to Firestore...');
+    await firebaseDb.collection('board').doc('videos').set({
+      version:2,
+      settings:normalizeSettings(existingVideoDoc.settings||videoPayload.settings),
+      cards:videoMerge.merged,
+      migratedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      migratedBy:currentSession?.userId||null
+    },{merge:true});
+    await firebaseDb.collection('board').doc('carousels').set({
+      version:1,
+      cards:carouselMerge.merged,
+      migratedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      migratedBy:currentSession?.userId||null
+    },{merge:true});
+    await loadData();
+    refreshOptionLists();
+    renderStagePills();
+    renderAll();
+    setLoading(100);setTimeout(()=>setLoading(0),400);
+    const lines=[
+      'Migration complete — no existing Firebase text/status fields were overwritten.',
+      `Videos: ${videoMerge.added} ticket(s) added, ${videoMerge.skipped} already existed, ${videoMerge.updatedMedia} existing ticket(s) had media links updated.`,
+      `Carousels: ${carouselMerge.added} ticket(s) added, ${carouselMerge.skipped} already existed, ${carouselMerge.updatedMedia} existing ticket(s) had media links updated.`,
+      `Files copied: ${state.done - state.failures.length}/${state.total}.`
+    ];
+    if(state.failures.length){
+      lines.push(`⚠ ${state.failures.length} file(s) could not be copied — the ticket was still saved, only that file link still points to OneDrive:`);
+      lines.push(...state.failures.map(f=>'  • '+f));
+    }
+    setMigrationStatus(lines.join('\n'),state.failures.length?'error':'');
+    showToast(state.failures.length?`Migration done — ${state.failures.length} file(s) need attention before deleting OneDrive`:'Migration complete',state.failures.length?'error':'success');
+  }catch(e){
+    setLoading(0);
+    setMigrationStatus('Migration failed: '+e.message,'error');
+    showToast('Migration failed','error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Migrate OneDrive to Firebase';}
+  }
 }
 
 async function switchBoardMode(mode){
@@ -566,6 +1082,7 @@ async function uploadFile(file,subfolder){
     }
     return{shareUrl:displayUrl,itemId:'local_'+uid(),downloadUrl:displayUrl};
   }
+  if(USE_FIREBASE)return firebaseUploadFileWithProgress(file,subfolder);
   await ensureSubfolder(subfolder);
   let res;
   if(file.size<4*1024*1024){
@@ -586,6 +1103,7 @@ async function uploadFileWithProgress(file,subfolder,onProgress){
     onProgress?.(100);
     return result;
   }
+  if(USE_FIREBASE)return firebaseUploadFileWithProgress(file,subfolder,onProgress);
   await ensureSubfolder(subfolder);
   let res;
   if(file.size<4*1024*1024){
@@ -637,9 +1155,57 @@ function setActionButtonsDisabled(containerId,disabled){
   container.querySelectorAll('button').forEach(btn=>{btn.disabled=disabled;});
 }
 
+async function fetchBlobWithProgress(url,onProgress){
+  const res=await fetch(url);
+  if(!res.ok)throw new Error(`Download failed: ${res.status}`);
+  const total=Number(res.headers.get('Content-Length'))||0;
+  if(!res.body){
+    onProgress?.(null);
+    const blob=await res.blob();
+    onProgress?.(100);
+    return blob;
+  }
+  const reader=res.body.getReader();
+  const chunks=[];
+  let received=0;
+  onProgress?.(total?0:null);
+  while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    chunks.push(value);
+    received+=value.length;
+    if(total)onProgress?.(Math.round((received/total)*100));
+  }
+  onProgress?.(100);
+  return new Blob(chunks,{type:res.headers.get('Content-Type')||'application/octet-stream'});
+}
+
+function triggerBlobDownload(blob,filename){
+  const objectUrl=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=objectUrl;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(objectUrl),30000);
+}
+
 
 async function refreshDisplayUrls(){
   if(LOCAL_MODE)return;
+  if(USE_FIREBASE){
+    await mapLimit(cards,5,async c=>{
+      if(c.thumbItemId){try{c.thumbDisplayUrl=await firebaseRefreshDownloadUrl(c.thumbItemId);}catch(e){}}
+      if(c.vidItemId){try{c.vidDisplayUrl=await firebaseRefreshDownloadUrl(c.vidItemId);}catch(e){}}
+      if(Array.isArray(c.images)&&c.images.length){
+        await mapLimit(c.images,4,async img=>{
+          if(img.itemId){try{img.downloadUrl=await firebaseRefreshDownloadUrl(img.itemId);}catch(e){}}
+        });
+      }
+    });
+    return;
+  }
   const now=Date.now();
   const needsRefresh=c=>!c._urlFetchedAt||(now-c._urlFetchedAt>DISPLAY_URL_TTL_MS);
   await mapLimit(cards,5,async c=>{
@@ -729,7 +1295,11 @@ function refreshOptionLists(){
 // ========== USERS SETTINGS ==========
 function renderUsersSettings(){
   if(!canManageSettings())return;
-  document.getElementById('usersSettingsList').innerHTML=boardUsers.map((u,i)=>`
+  const firebaseNote=USE_FIREBASE?`
+    <div class="settings-help" style="margin-bottom:8px">
+      Add new users from Firebase Authentication, then create their Firestore user profile with the same UID.
+    </div>`:'';
+  document.getElementById('usersSettingsList').innerHTML=firebaseNote+boardUsers.map((u,i)=>`
     <div class="user-row">
       <div>
         <div class="user-row-info">
@@ -740,11 +1310,13 @@ function renderUsersSettings(){
         </div>
         <div class="user-actions" style="margin-top:6px">
           <button class="user-action-btn" onclick="toggleUserRole(${i})">${u.role==='admin'?'Make user':'Make admin'}</button>
-          <button class="user-action-btn" onclick="resetUserPassword(${i})">Reset password</button>
+          ${USE_FIREBASE?'':`<button class="user-action-btn" onclick="resetUserPassword(${i})">Reset password</button>`}
           ${u.username!==currentSession?.username?`<button class="user-action-btn" style="color:#f87171;border-color:#7f1d1d" onclick="deleteUser(${i})">Delete</button>`:''}
         </div>
       </div>
     </div>`).join('');
+  const addRow=document.querySelector('.users-add-row');
+  if(addRow)addRow.style.display=USE_FIREBASE?'none':'grid';
 }
 
 async function toggleUserRole(i){
@@ -756,6 +1328,7 @@ async function toggleUserRole(i){
 
 async function resetUserPassword(i){
   if(!canManageSettings())return;
+  if(USE_FIREBASE){showToast('Reset Firebase passwords from Firebase Authentication','error');return;}
   const u=boardUsers[i];
   const salt=generateSalt();
   boardUsers[i].passwordHash=await hashPassword(DEFAULT_PASSWORD,salt);
@@ -769,6 +1342,12 @@ async function deleteUser(i){
   if(!canManageSettings())return;
   const u=boardUsers[i];
   if(u.username===currentSession?.username)return;
+  if(USE_FIREBASE){
+    boardUsers[i].active=false;
+    try{await saveUsers();await loadUsers();renderUsersSettings();showToast(`${u.username} disabled`,'success');}
+    catch(e){showToast('Error: '+e.message,'error');}
+    return;
+  }
   boardUsers.splice(i,1);
   try{await saveUsers();renderUsersSettings();showToast(`${u.username} removed`,'success');}
   catch(e){showToast('Error: '+e.message,'error');}
@@ -776,6 +1355,7 @@ async function deleteUser(i){
 
 async function addUser(){
   if(!canManageSettings())return;
+  if(USE_FIREBASE){showToast('Create the Firebase Auth user first, then add its Firestore profile','error');return;}
   const nameEl=document.getElementById('newUserNameInput');
   const roleEl=document.getElementById('newUserRoleInput');
   const username=nameEl.value.trim().toLowerCase();
@@ -795,6 +1375,7 @@ function openSettings(){
   settingsDraft=cloneSettings(getSettings());
   renderSettings();
   renderUsersSettings();
+  toggleMigrationUi();
   document.getElementById('settingsBg').classList.add('open');
 }
 function closeSettings(){document.getElementById('settingsBg').classList.remove('open');settingsDraft=null;}
@@ -1265,7 +1846,7 @@ function openEdit(id){
     document.getElementById('thumbStatus').textContent='File uploaded ✓';
     document.getElementById('thumbLabel').textContent='Change image';
     const tv=safeUrl(c.thumbUrl);
-    document.getElementById('thumbLink').innerHTML=tv?`<a href="${escHtml(tv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    document.getElementById('thumbLink').innerHTML=tv?`<a href="${escHtml(tv)}" target="_blank" style="color:#3b82f6">View in ${escHtml(storageLabel())} →</a>`:'';
     document.getElementById('thumbActions').style.display='flex';
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
@@ -1274,7 +1855,7 @@ function openEdit(id){
     document.getElementById('vidStatus').textContent='File uploaded ✓';
     document.getElementById('vidLabel').textContent='Change video';
     const vv=safeUrl(c.vidUrl);
-    document.getElementById('vidLink').innerHTML=vv?`<a href="${escHtml(vv)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    document.getElementById('vidLink').innerHTML=vv?`<a href="${escHtml(vv)}" target="_blank" style="color:#3b82f6">View in ${escHtml(storageLabel())} →</a>`:'';
     document.getElementById('vidActions').style.display='flex';
     setPreview('vid',vidDisplayUrl,c.name);
   }
@@ -1305,10 +1886,10 @@ async function handleUpload(file,type){
     else{vidOneDriveUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;}
     setPlainStatus(statusEl,'Uploaded ✓');
     const rl=safeUrl(result.shareUrl);
-    linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View on OneDrive →</a>`:'';
+    linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View in ${escHtml(storageLabel())} →</a>`:'';
     document.getElementById(type+'Actions').style.display='flex';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,document.getElementById('fName').value||'');
-    showToast(LOCAL_MODE?'File saved locally':'File uploaded to OneDrive','success');
+    showToast(LOCAL_MODE?'File saved locally':`File uploaded to ${storageLabel()}`,'success');
   }catch(e){if(transferGen===gen){setPlainStatus(statusEl,'Upload failed: '+e.message,'error');showToast('Upload failed','error');}}
   boxEl.classList.remove('uploading');
   settle();
@@ -1316,6 +1897,8 @@ async function handleUpload(file,type){
 }
 
 async function downloadUpload(type){
+  const gen=transferGen;
+  const statusEl=document.getElementById(type+'Status');
   const itemId = type==='thumb' ? thumbItemId : vidItemId;
   const cachedUrl = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
   if(!itemId && !cachedUrl){showToast('No file to download','error');return;}
@@ -1323,29 +1906,59 @@ async function downloadUpload(type){
   const ext = type==='thumb' ? '.jpg' : '.mp4';
   // Always fetch a fresh pre-auth URL — cached ones expire after ~1 hour
   let url = cachedUrl;
-  if(itemId && !LOCAL_MODE){
+  if(itemId && USE_FIREBASE){
     try{
-      const meta = await apiCall(await boardItemPath(itemId));
-      url = meta['@microsoft.graph.downloadUrl'] || cachedUrl;
+      url=await firebaseRefreshDownloadUrl(itemId);
       if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
     }catch(e){}
   }
+  if(itemId && !LOCAL_MODE){
+    try{
+      if(!USE_FIREBASE){
+        const meta = await apiCall(await boardItemPath(itemId));
+        url = meta['@microsoft.graph.downloadUrl'] || cachedUrl;
+        if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
+      }
+    }catch(e){}
+  }
   if(!url){showToast('No file to download','error');return;}
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name+'-'+(type==='thumb'?'thumbnail':'video')+ext;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  setActionButtonsDisabled(type+'Actions',true);
+  setTransferStatus(statusEl,'Downloading',0);
+  try{
+    const blob=await fetchBlobWithProgress(url,pct=>{
+      if(transferGen!==gen)return;
+      setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
+    });
+    if(transferGen!==gen)return;
+    triggerBlobDownload(blob,name+'-'+(type==='thumb'?'thumbnail':'video')+ext);
+    setPlainStatus(statusEl,'Download started ✓');
+    showToast('Download started','success');
+    setTimeout(()=>{
+      if(transferGen===gen&&statusEl.textContent==='Download started ✓')setPlainStatus(statusEl,'Uploaded ✓');
+    },1800);
+  }catch(e){
+    if(transferGen===gen){
+      setPlainStatus(statusEl,'Download failed: '+e.message,'error');
+      showToast('Download failed','error');
+    }
+  }finally{
+    setActionButtonsDisabled(type+'Actions',false);
+  }
 }
 
 async function removeUpload(type){
   const label = type==='thumb' ? 'thumbnail image' : 'video';
-  if(!confirm(`Delete the uploaded ${label} from OneDrive? This cannot be undone.`)) return;
+  if(!confirm(`Delete the uploaded ${label} from ${storageLabel()}? This cannot be undone.`)) return;
   const itemId = type==='thumb' ? thumbItemId : vidItemId;
+  if(itemId && USE_FIREBASE){
+    try{await firebaseDeleteFile(itemId);}
+    catch(e){
+      if(e.code!=='storage/object-not-found') return showToast('Delete failed: '+e.message,'error');
+    }
+  }
   if(itemId && !LOCAL_MODE){
     try{
-      await apiCall(await boardItemPath(itemId),'DELETE');
+      if(!USE_FIREBASE)await apiCall(await boardItemPath(itemId),'DELETE');
     }catch(e){
       // Ignore 404 (already deleted); fail on others
       if(e.status!==404) return showToast('Delete failed: '+e.message,'error');
@@ -1366,7 +1979,7 @@ async function removeUpload(type){
     document.getElementById('vidActions').style.display='none';
     const p=document.getElementById('vidPreview');p.style.display='none';p.innerHTML='';
   }
-  showToast('File deleted from OneDrive','success');
+  showToast(`File deleted from ${storageLabel()}`,'success');
 }
 
 function renderCarouselImagesGrid(){
@@ -1393,22 +2006,42 @@ function removeCarouselImage(idx){
 
 async function downloadAllCarouselImages(){
   if(!carouselImages.length) return;
+  const gen=transferGen;
+  const statusEl=document.getElementById('carouselImagesStatus');
+  const btn=document.getElementById('carouselDownloadAll');
+  if(btn)btn.disabled=true;
+  setTransferStatus(statusEl,`Downloading 0/${carouselImages.length}`,0);
+  let failed=false;
   for(let i=0;i<carouselImages.length;i++){
     const img=carouselImages[i];
     // Fetch fresh pre-auth URL to avoid 1-hour expiry error on SharePoint
     let url=img.downloadUrl||img.shareUrl;
-    if(img.itemId&&!LOCAL_MODE){
+    if(img.itemId&&USE_FIREBASE){
+      try{url=await firebaseRefreshDownloadUrl(img.itemId);img.downloadUrl=url;}catch(e){}
+    }
+    if(img.itemId&&!LOCAL_MODE&&!USE_FIREBASE){
       try{const m=await apiCall(await boardItemPath(img.itemId));url=m['@microsoft.graph.downloadUrl']||url;img.downloadUrl=url;}catch(e){}
     }
     if(!url) continue;
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=`slide-${i+1}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    if(i<carouselImages.length-1) await new Promise(r=>setTimeout(r,300));
+    try{
+      const blob=await fetchBlobWithProgress(url,pct=>{
+        if(transferGen!==gen)return;
+        const base=Math.round((i/carouselImages.length)*100);
+        const part=typeof pct==='number'?Math.round(pct/carouselImages.length):0;
+        setTransferStatus(statusEl,`Downloading ${i+1}/${carouselImages.length}`,Math.min(100,base+part));
+      });
+      if(transferGen!==gen)return;
+      triggerBlobDownload(blob,`slide-${i+1}`);
+      if(i<carouselImages.length-1) await new Promise(r=>setTimeout(r,300));
+    }catch(e){
+      failed=true;
+      if(transferGen===gen)setPlainStatus(statusEl,`Download failed on slide ${i+1}: ${e.message}`,'error');
+      break;
+    }
   }
+  if(btn)btn.disabled=false;
+  if(failed)return;
+  if(transferGen===gen)setPlainStatus(statusEl,`Download started for ${carouselImages.length} image${carouselImages.length>1?'s':''} ✓`);
   showToast(`Download started for ${carouselImages.length} image${carouselImages.length>1?'s':''}...`,'success');
 }
 
@@ -1745,6 +2378,7 @@ document.getElementById('addPersonBtn').addEventListener('click',addSettingsPers
 document.getElementById('addCategoryBtn').addEventListener('click',addSettingsCategory);
 document.getElementById('saveSettingsBtn').addEventListener('click',saveSettings);
 document.getElementById('addUserBtn').addEventListener('click',addUser);
+document.getElementById('migrateFirebaseBtn').addEventListener('click',runOneDriveFirebaseMigration);
 document.getElementById('newPersonName').addEventListener('keydown',e=>{if(e.key==='Enter')addSettingsPerson();});
 document.getElementById('newCategoryName').addEventListener('keydown',e=>{if(e.key==='Enter')addSettingsCategory();});
 document.getElementById('newUserNameInput').addEventListener('keydown',e=>{if(e.key==='Enter')addUser();});
