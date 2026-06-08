@@ -2547,6 +2547,15 @@ async function confirmPostingCompose(){
   renderPostingQueue();
   showToast(postingWhenMode==='schedule'?'Post scheduled':'Post queued for backend publishing','success');
   closePostingCompose();
+  if(status==='queued'){
+    // "Publish now" shouldn't have to wait for the next backend sweep
+    // (every few minutes) — kick the worker immediately. Fire-and-forget:
+    // if this call fails for any reason the scheduled sweep will still
+    // pick the job up shortly after, so we don't surface errors here.
+    try{
+      firebaseFunctions.httpsCallable('processPostingQueueNow')().catch(()=>{});
+    }catch(e){}
+  }
 }
 
 async function openPosting(){

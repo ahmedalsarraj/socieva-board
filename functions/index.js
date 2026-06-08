@@ -278,11 +278,15 @@ async function sweepQueue(secrets) {
 }
 
 /**
- * Scheduled sweep — adjust the cadence to match how time-sensitive your
- * scheduled posts are. Every 5 minutes is a reasonable default.
+ * Scheduled sweep — safety net that catches anything the immediate triggers
+ * miss (e.g. a "Publish now" call that failed to reach processPostingQueueNow,
+ * or a scheduled post whose time arrives while no one is interacting with the
+ * board). Runs every minute — the minimum granularity Cloud Scheduler
+ * supports — so a "scheduled" post goes out within ~60s of its target time
+ * even in the worst case, instead of up to 5 minutes late.
  */
 exports.processPostingQueue = onSchedule(
-  {schedule: 'every 5 minutes', secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1'},
+  {schedule: 'every 1 minutes', secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1'},
   async () => {
     await sweepQueue({instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value()});
   }
