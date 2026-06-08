@@ -1706,8 +1706,8 @@ function exportCSV() {
 // NOTE: publishing is intentionally queued from the browser only. Platform API
 // credentials and actual publish calls must live in Cloud Functions/backend code.
 const POSTING_ACCOUNTS = [
-  {id:'ig_news',   platform:'instagram', label:'Instagram — News',   handle:'@capital_news'},
-  {id:'ig_arabic', platform:'instagram', label:'Instagram — Arabic', handle:'@capital_arabic'},
+  {id:'ig_news',   platform:'instagram', label:'Instagram — News',   handle:'@capitalcomnews'},
+  {id:'ig_arabic', platform:'instagram', label:'Instagram — Arabic', handle:'@capitalcomarabia'},
   {id:'youtube',   platform:'youtube',   label:'YouTube',            handle:'Capital.com Arabic'},
   {id:'tiktok',    platform:'tiktok',    label:'TikTok',             handle:'@capital_tiktok'}
 ];
