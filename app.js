@@ -608,12 +608,13 @@ function buildBoardPayload(){return{version:2,settings:normalizeSettings(getSett
 
 async function migrateLegacyCardsIfNeeded(mode,legacyData,existingCards=[]){
   if(!Array.isArray(legacyData?.cards)||!legacyData.cards.length)return false;
+  const deletedIds=new Set(Array.isArray(legacyData?.deletedCardIds)?legacyData.deletedCardIds.filter(Boolean):[]);
   const existingIds=new Set(
     Array.isArray(existingCards)
       ? existingCards.map(card=>typeof card==='string'?card:card?.id).filter(Boolean)
       : []
   );
-  const missingLegacyCards=legacyData.cards.filter(raw=>raw?.id&&!existingIds.has(raw.id));
+  const missingLegacyCards=legacyData.cards.filter(raw=>raw?.id&&!existingIds.has(raw.id)&&!deletedIds.has(raw.id));
   if(!missingLegacyCards.length)return false;
   const batch=firebaseDb.batch();
   missingLegacyCards.forEach((raw,index)=>{
@@ -668,7 +669,8 @@ async function saveData(){
     savedCardRevs.clear();
     const metaRef=firebaseBoardRef(mode);
     const metaSnap=await tx.get(metaRef);
-    const remoteRevision=Number(metaSnap.exists?(metaSnap.data()?.revision||0):0);
+    const remoteMeta=metaSnap.exists?(metaSnap.data()||{}):{};
+    const remoteRevision=Number(remoteMeta.revision||0);
     if(settingsChanged&&remoteRevision!==boardRevision){
       throw new Error('Settings changed in another session. Close settings, review the latest board, then retry.');
     }
@@ -715,10 +717,16 @@ async function saveData(){
       }
     }
 
+    const legacyCards=Array.isArray(remoteMeta.cards)?remoteMeta.cards:null;
+    const deletedIds=deletedReads.map(item=>item.id).filter(Boolean);
+    const deletedIdSet=new Set(deletedIds);
+
     const nextRevision=settingsChanged?remoteRevision+1:remoteRevision;
     tx.set(metaRef,{
       version:mode==='carousels'?1:2,
       ...(mode==='videos'?{settings:normalizeSettings(getSettings())}:{}),
+      ...(legacyCards&&deletedIds.length?{cards:legacyCards.filter(card=>card?.id&&!deletedIdSet.has(card.id))}:{}),
+      ...(deletedIds.length?{deletedCardIds:firebase.firestore.FieldValue.arrayUnion(...deletedIds)}:{}),
       revision:nextRevision,
       updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
       updatedAtMs:Date.now(),
