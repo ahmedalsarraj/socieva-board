@@ -2855,7 +2855,13 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
   // Offer Undo for 5 seconds. Undo re-creates the card in Firestore (the
   // card's id is no longer in cardBaselineData after the delete, so saveData
   // treats it as a new card and writes it back with tx.set).
+  // Guard against board-mode switch during the undo window: if the user
+  // flipped to the other board (videos ↔ carousels) before clicking Undo,
+  // the card belongs to a different collection and we must not splice it
+  // into the wrong cards array.
+  const modeAtDelete=boardMode;
   showToastUndo('"'+cardToDelete.name+'" deleted',async()=>{
+    if(boardMode!==modeAtDelete){showToast('Cannot undo — board mode changed','error');return;}
     cards.splice(Math.min(originalIndex,cards.length),0,cardToDelete);
     renderAll();
     try{await saveData();}catch(e){showToast('Undo failed: '+e.message,'error');}
