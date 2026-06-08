@@ -498,10 +498,13 @@ function subscribeFirebaseBoard(mode=boardMode){
         setSyncDot('error');
         if(first){first=false;reject(err);}
     };
-    const metaUnsub=firebaseBoardRef(mode).onSnapshot(doc=>{
-      latestMeta=doc.exists?doc.data():{};
-      lastFromCache=doc.metadata?.fromCache;
-      applyLatest();
+    const metaUnsub=firebaseBoardRef(mode).onSnapshot(async doc=>{
+      try{
+        latestMeta=doc.exists?doc.data():{};
+        lastFromCache=doc.metadata?.fromCache;
+        if(latestCards&&await migrateLegacyCardsIfNeeded(mode,latestMeta,latestCards))return;
+        applyLatest();
+      }catch(e){fail(e);}
     },fail);
     const cardsUnsub=firebaseCardsRef(mode).onSnapshot(async snap=>{
       try{
@@ -510,7 +513,9 @@ function subscribeFirebaseBoard(mode=boardMode){
         if(!latestCards.length){
           const metaSnap=await firebaseBoardRef(mode).get();
           const meta=metaSnap.exists?metaSnap.data():null;
-          if(await migrateLegacyCardsIfNeeded(mode,meta,0))return;
+          if(await migrateLegacyCardsIfNeeded(mode,meta,[]))return;
+        }else if(await migrateLegacyCardsIfNeeded(mode,latestMeta,latestCards)){
+          return;
         }
         applyLatest();
         if(first){first=false;resolve(true);}
@@ -593,10 +598,17 @@ function parseBoardData(data){
 
 function buildBoardPayload(){return{version:2,settings:normalizeSettings(getSettings()),cards};}
 
-async function migrateLegacyCardsIfNeeded(mode,legacyData,existingCount){
-  if(existingCount||!Array.isArray(legacyData?.cards)||!legacyData.cards.length)return false;
+async function migrateLegacyCardsIfNeeded(mode,legacyData,existingCards=[]){
+  if(!Array.isArray(legacyData?.cards)||!legacyData.cards.length)return false;
+  const existingIds=new Set(
+    Array.isArray(existingCards)
+      ? existingCards.map(card=>typeof card==='string'?card:card?.id).filter(Boolean)
+      : []
+  );
+  const missingLegacyCards=legacyData.cards.filter(raw=>raw?.id&&!existingIds.has(raw.id));
+  if(!missingLegacyCards.length)return false;
   const batch=firebaseDb.batch();
-  legacyData.cards.forEach((raw,index)=>{
+  missingLegacyCards.forEach((raw,index)=>{
     const card={...raw,id:raw.id||uid(),sortIndex:Number.isFinite(raw.sortIndex)?raw.sortIndex:index,_rev:Number(raw._rev||0)};
     const ref=firebaseCardsRef(mode).doc(card.id);
     batch.set(ref,{...cleanCardForStorage(card),_rev:card._rev});
@@ -617,6 +629,9 @@ async function loadData(){
   const meta=metaDoc.exists?metaDoc.data():null;
   if(!cardsSnap.empty){
     cards=cardsFromSnapshot(cardsSnap);
+    if(await migrateLegacyCardsIfNeeded(mode,meta,cards)){
+      return loadData();
+    }
     boardRevision=Number(meta?.revision||0);
     if(mode==='videos')boardSettings=normalizeSettings(meta?.settings);
     else boardSettings=boardSettings||defaultSettings();
@@ -625,7 +640,7 @@ async function loadData(){
     cacheFirebaseBoardPayload(mode,{version:mode==='carousels'?1:2,cards,settings:mode==='videos'?normalizeSettings(getSettings()):undefined,revision:boardRevision});
     return;
   }
-  if(await migrateLegacyCardsIfNeeded(mode,meta,0)){
+  if(await migrateLegacyCardsIfNeeded(mode,meta,[])){
     return loadData();
   }
   applyBoardPayload(meta,mode);
@@ -1039,6 +1054,22 @@ function setSyncDot(state){
   if(state==='syncing'){d.style.background='#e8a83b';}
   else if(state==='ok'){d.style.background='#5ae8a0';setTimeout(()=>{d.style.background='var(--border2)';},2000);}
   else if(state==='error'){d.style.background='#f87171';setTimeout(()=>{d.style.background='var(--border2)';},4000);}
+}
+
+async function forceRefreshBoard(){
+  if(boardUiBusy()){showToast('Close the open editor before refreshing the board.','error');return;}
+  setSyncDot('syncing');
+  try{
+    await loadData();
+    renderSyncedBoard();
+    await refreshDisplayUrls({onlyMissing:true}).catch(()=>{});
+    renderAll();
+    setSyncDot('ok');
+    showToast('Board refreshed','success');
+  }catch(e){
+    setSyncDot('error');
+    showToast('Refresh failed: '+e.message,'error');
+  }
 }
 
 function showToast(msg,type=''){
@@ -1768,19 +1799,21 @@ function showToastUndo(msg){
 }
 
 // ========== REPORTS ==========
-let reportPeriod = 'all';
+let reportPeriod = 'month';
 let reportTab = 'board';
 let platformReportAccountId = 'ig_news';
 let platformReportLoading = false;
 let platformReportData = null;
+let platformTopContentLoading = false;
+let platformTopContentMode = null;
 
 function numFmt(n){
+  if(n==null||Number.isNaN(Number(n)))return'—';
   return Number(n||0).toLocaleString('en-US');
 }
 
 function reportPeriodLabel(){
   const {from, to} = getReportRange();
-  if(reportPeriod==='all')return'All time';
   if(reportPeriod==='today')return'Today';
   if(reportPeriod==='week')return'This week';
   if(reportPeriod==='month')return'This month';
@@ -1806,7 +1839,9 @@ function getReportRange() {
   if (reportPeriod === 'custom') {
     return {from: document.getElementById('reportFromDate').value||'', to: document.getElementById('reportToDate').value||''};
   }
-  return {from:'', to:''};
+  const from = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+  const to = fmt(new Date(now.getFullYear(), now.getMonth()+1, 0));
+  return {from, to};
 }
 
 function localDateStr(isoStr) {
@@ -1930,10 +1965,31 @@ function setupReportsHeader(){
 
 function renderMetricCard(icon,label,value){
   return`<div class="platform-metric-card">
-    <div class="platform-metric-icon">${icon}</div>
+    <div class="platform-metric-head"><span class="platform-metric-icon">${icon}</span><span class="platform-metric-label">${escHtml(label)}</span></div>
     <div class="platform-metric-value">${numFmt(value)}</div>
-    <div class="platform-metric-label">${escHtml(label)}</div>
   </div>`;
+}
+
+function renderPlatformInsightBars(totals){
+  const items=[
+    ['Views',totals.views],
+    ['Reach',totals.reach],
+    ['Engagement',totals.totalInteractions],
+    ['Likes',totals.likes],
+    ['Comments',totals.comments],
+    ['Saves',totals.saves],
+    ['Shares',totals.shares]
+  ].filter(([,value])=>value!=null&&Number(value)>0);
+  if(!items.length)return'<div class="widget-empty">No chartable metrics returned for this period.</div>';
+  const max=Math.max(...items.map(([,value])=>Number(value)||0),1);
+  return items.map(([label,value])=>{
+    const pct=Math.max(3,Math.round((Number(value)||0)/max*100));
+    return`<div class="platform-chart-row">
+      <div class="platform-chart-label">${escHtml(label)}</div>
+      <div class="platform-chart-track"><div class="platform-chart-fill" style="width:${pct}%"></div></div>
+      <div class="platform-chart-value">${numFmt(value)}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderPlatformReportSkeleton(message='Loading platform report...'){
@@ -1962,27 +2018,43 @@ function renderPlatformReport(){
 
   const totals=platformReportData.totals||{};
   const rows=Array.isArray(platformReportData.rows)?platformReportData.rows:[];
+  const topMode=platformReportData.contentType||platformTopContentMode||'all';
   document.getElementById('reportsBody').innerHTML=`
     <div class="report-period-note">
       <span style="color:var(--text2);font-weight:500">${escHtml(account.label)}</span>
       &nbsp;·&nbsp; Period: <strong style="color:var(--text)">${escHtml(reportPeriodLabel())}</strong>
-      &nbsp;·&nbsp; Source: ${escHtml(account.platform)} API
+      &nbsp;·&nbsp; Overview source: ${platformReportData.overviewSource==='account_insights'?'Meta account insights':escHtml(account.platform+' API')}
     </div>
 
     <div class="report-section-title">Overview</div>
-    <div class="platform-overview-grid">
-      ${renderMetricCard('V','Views',totals.views)}
-      ${renderMetricCard('IM','Impressions',totals.impressions)}
-      ${renderMetricCard('L','Likes',totals.likes)}
-      ${renderMetricCard('C','Comments',totals.comments)}
-      ${renderMetricCard('SV','Saves',totals.saves)}
-      ${renderMetricCard('SH','Shares',totals.shares)}
-      ${renderMetricCard('P','Published content',totals.publishedContent)}
-      ${renderMetricCard('E','Engagement',totals.totalInteractions)}
+    <div class="platform-report-layout">
+      <div class="platform-overview-grid">
+        ${renderMetricCard('Views','Views',totals.views)}
+        ${renderMetricCard('Impressions','Impressions',totals.impressions)}
+        ${renderMetricCard('Reach','Reach',totals.reach)}
+        ${renderMetricCard('Engagement','Engagement',totals.totalInteractions)}
+        ${renderMetricCard('Likes','Likes',totals.likes)}
+        ${renderMetricCard('Comments','Comments',totals.comments)}
+        ${renderMetricCard('Saves','Saves',totals.saves)}
+        ${renderMetricCard('Shares','Shares',totals.shares)}
+        ${renderMetricCard('Content','Published content',totals.publishedContent)}
+      </div>
+      <div class="platform-chart-card">
+        <div class="widget-title">Performance distribution</div>
+        ${renderPlatformInsightBars(totals)}
+      </div>
     </div>
 
     <div class="report-section-title">Top 10 Content</div>
-    ${rows.length?`<div class="report-table-wrap">
+    <div class="top-content-toolbar">
+      <span class="report-period-note" style="margin-bottom:0">Optional content-level ranking. Overview totals above do not depend on this table.</span>
+      <div class="top-content-actions">
+        <button class="btn top-content-btn ${topMode==='all'&&rows.length?'active':''}" data-content-type="all">${platformTopContentLoading&&platformTopContentMode==='all'?'Loading...':'Show top 10 all content'}</button>
+        <button class="btn top-content-btn ${topMode==='reels'&&rows.length?'active':''}" data-content-type="reels">${platformTopContentLoading&&platformTopContentMode==='reels'?'Loading...':'Reels'}</button>
+        <button class="btn top-content-btn ${topMode==='posts'&&rows.length?'active':''}" data-content-type="posts">${platformTopContentLoading&&platformTopContentMode==='posts'?'Loading...':'Posts'}</button>
+      </div>
+    </div>
+    ${platformTopContentLoading?'<div class="platform-report-empty">Loading top content...</div>':(platformReportData.topContentLoaded&&rows.length?`<div class="report-table-wrap">
       <table class="report-table">
         <thead><tr>
           <th>#</th><th>Content</th><th>Type</th><th>Published</th><th>Views</th><th>Impressions</th><th>Likes</th><th>Comments</th><th>Saves</th><th>Shares</th><th>Engagement</th><th>Link</th>
@@ -2004,7 +2076,10 @@ function renderPlatformReport(){
           </tr>`).join('')}
         </tbody>
       </table>
-    </div>`:'<div class="platform-report-empty">No published content found in this period.</div>'}`;
+    </div>`:(platformReportData.topContentLoaded?'<div class="platform-report-empty">No published content found for this selection.</div>':'<div class="platform-report-empty">Top 10 is not loaded yet. Choose all content, Reels, or Posts when you need the ranking.</div>'))}`;
+  document.querySelectorAll('.top-content-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>loadPlatformTopContent(btn.dataset.contentType));
+  });
 }
 
 async function loadPlatformReport(){
@@ -2020,12 +2095,36 @@ async function loadPlatformReport(){
   renderPlatformReport();
   try{
     const fn=firebaseFunctions.httpsCallable('getPlatformReport');
-    const res=await fn({accountId:platformReportAccountId,from,to});
+    const res=await fn({accountId:platformReportAccountId,from,to,includeTopContent:false});
     platformReportData=res.data||{ok:false,reason:'No report data returned.'};
   }catch(e){
     platformReportData={ok:false,reason:e?.message||String(e)};
   }finally{
     platformReportLoading=false;
+    renderPlatformReport();
+  }
+}
+
+async function loadPlatformTopContent(contentType='all'){
+  if(reportTab!=='platforms'||!firebaseFunctions||!platformReportData?.ok)return;
+  const {from,to}=getReportRange();
+  platformTopContentLoading=true;
+  platformTopContentMode=contentType;
+  renderPlatformReport();
+  try{
+    const fn=firebaseFunctions.httpsCallable('getPlatformReport');
+    const res=await fn({accountId:platformReportAccountId,from,to,includeTopContent:true,contentType});
+    const next=res.data||{};
+    platformReportData={
+      ...platformReportData,
+      ...next,
+      totals:platformReportData.totals,
+      overviewSource:platformReportData.overviewSource
+    };
+  }catch(e){
+    showToast('Top content load failed: '+(e?.message||String(e)),'error');
+  }finally{
+    platformTopContentLoading=false;
     renderPlatformReport();
   }
 }
@@ -2594,6 +2693,7 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
   }catch(e){
     cards=previousCards;
     renderAll();
+    document.getElementById('fNameError').textContent='Save failed: '+e.message;
     showToast('Save failed: '+e.message,'error');
   }
   btn.textContent='Save';btn.disabled=false;
@@ -2705,6 +2805,7 @@ document.querySelectorAll('.board-tab').forEach(btn=>{
 
 document.getElementById('openReportsBtn').addEventListener('click', openReports);
 document.getElementById('closeReportsBtn').addEventListener('click', closeReports);
+document.getElementById('syncDot').addEventListener('click', forceRefreshBoard);
 document.getElementById('openPostingBtn').addEventListener('click', openPosting);
 document.getElementById('closePostingBtn').addEventListener('click', closePosting);
 document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
@@ -2712,13 +2813,14 @@ document.getElementById('printReportBtn').addEventListener('click', () => window
 document.querySelectorAll('.report-tab').forEach(btn=>{
   btn.addEventListener('click',()=>{
     reportTab=btn.dataset.reportTab;
-    if(reportTab==='platforms')platformReportData=null;
+    if(reportTab==='platforms'){platformReportData=null;platformTopContentMode=null;}
     renderReport();
   });
 });
 document.getElementById('platformReportAccount').addEventListener('change',e=>{
   platformReportAccountId=e.target.value;
   platformReportData=null;
+  platformTopContentMode=null;
   renderReport();
 });
 document.querySelectorAll('.period-btn').forEach(btn => {
@@ -2727,12 +2829,12 @@ document.querySelectorAll('.period-btn').forEach(btn => {
     document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('reportCustomDates').style.display = reportPeriod === 'custom' ? 'flex' : 'none';
-    if(reportTab==='platforms')platformReportData=null;
+    if(reportTab==='platforms'){platformReportData=null;platformTopContentMode=null;}
     renderReport();
   });
 });
-document.getElementById('reportFromDate').addEventListener('change',()=>{if(reportTab==='platforms')platformReportData=null;renderReport();});
-document.getElementById('reportToDate').addEventListener('change',()=>{if(reportTab==='platforms')platformReportData=null;renderReport();});
+document.getElementById('reportFromDate').addEventListener('change',()=>{if(reportTab==='platforms'){platformReportData=null;platformTopContentMode=null;}renderReport();});
+document.getElementById('reportToDate').addEventListener('change',()=>{if(reportTab==='platforms'){platformReportData=null;platformTopContentMode=null;}renderReport();});
 
 document.getElementById('lightboxClose').addEventListener('click',closeLightbox);
 document.getElementById('lightbox').addEventListener('click',function(e){if(e.target===this)closeLightbox();});

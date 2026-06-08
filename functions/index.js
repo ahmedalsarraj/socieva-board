@@ -314,6 +314,8 @@ exports.getPlatformReport = onCall(
     const accountId = String(request.data?.accountId || '').trim();
     const from = String(request.data?.from || '').trim();
     const to = String(request.data?.to || '').trim();
+    const includeTopContent = request.data?.includeTopContent === true;
+    const contentType = String(request.data?.contentType || 'all').trim();
     if (!accountId) throw new HttpsError('invalid-argument', 'accountId is required.');
 
     const platform = ACCOUNT_PLATFORM[accountId];
@@ -338,6 +340,8 @@ exports.getPlatformReport = onCall(
         accountMeta,
         from,
         to,
+        includeTopContent,
+        contentType,
         secrets: {instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value()}
       });
     } catch (e) {

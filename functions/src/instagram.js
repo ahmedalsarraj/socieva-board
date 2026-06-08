@@ -157,8 +157,25 @@ async function publishContainer({igUserId, containerId, accessToken}) {
 
 function metricValue(insights, name) {
   const item = Array.isArray(insights?.data) ? insights.data.find(m => m.name === name) : null;
-  const value = Array.isArray(item?.values) ? item.values[item.values.length - 1]?.value : item?.value;
+  const value = item?.total_value?.value ?? item?.value;
+  if (value == null) return null;
   return Number(value || 0);
+}
+
+function sumMetricValues(insights, name) {
+  const item = Array.isArray(insights?.data) ? insights.data.find(m => m.name === name) : null;
+  if (!item) return null;
+  if (item.total_value?.value != null) return Number(item.total_value.value || 0);
+  if (!Array.isArray(item.values)) return Number(item.value || 0);
+  return item.values.reduce((sum, entry) => sum + Number(entry.value || 0), 0);
+}
+
+function mergeMetricData(target, source) {
+  for (const item of source?.data || []) {
+    const existingIndex = target.data.findIndex(existing => existing.name === item.name);
+    if (existingIndex === -1) target.data.push(item);
+    else target.data[existingIndex] = item;
+  }
 }
 
 function inDateRange(timestamp, from, to) {
@@ -196,7 +213,107 @@ async function getMediaInsights(mediaId, accessToken) {
   return combined;
 }
 
-async function getInstagramPlatformReport({accountId, accountMeta, secrets, from = '', to = '', limit = 50}) {
+function dateToUnixStart(dateStr) {
+  if (!dateStr) return null;
+  return Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000);
+}
+
+function dateToUnixEnd(dateStr) {
+  if (!dateStr) return null;
+  return Math.floor(new Date(`${dateStr}T23:59:59Z`).getTime() / 1000);
+}
+
+async function getAccountInsights({igUserId, accessToken, from, to}) {
+  const since = dateToUnixStart(from);
+  const until = dateToUnixEnd(to);
+  const baseParams = {};
+  if (since) baseParams.since = since;
+  if (until) baseParams.until = until;
+
+  const combined = {data: []};
+  const unavailable = [];
+  const attempts = [
+    {
+      metrics: 'views,reach,accounts_engaged,total_interactions,likes,comments,shares,saves,replies,reposts',
+      params: {...baseParams, period: 'day', metric_type: 'total_value'}
+    },
+    {
+      metrics: 'views,reach,accounts_engaged,total_interactions,likes,comments,shares,saves',
+      params: {...baseParams, period: 'day'}
+    },
+    {
+      metrics: 'impressions,reach,profile_views',
+      params: {...baseParams, period: 'day'}
+    }
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const res = await igRequest(`${igUserId}/insights`, {
+        params: {metric: attempt.metrics, ...attempt.params},
+        accessToken
+      });
+      mergeMetricData(combined, res);
+    } catch (e) {
+      unavailable.push({metrics: attempt.metrics, error: e.message || String(e)});
+    }
+  }
+
+  const metric = name => {
+    const totalValue = metricValue(combined, name);
+    if (totalValue != null) return totalValue;
+    return sumMetricValues(combined, name);
+  };
+
+  return {
+    totals: {
+      views: metric('views'),
+      impressions: metric('impressions'),
+      likes: metric('likes'),
+      comments: metric('comments'),
+      saves: metric('saves') ?? metric('saved'),
+      shares: metric('shares'),
+      reach: metric('reach'),
+      totalInteractions: metric('total_interactions') ?? metric('accounts_engaged')
+    },
+    unavailable,
+    rawMetricNames: combined.data.map(item => item.name)
+  };
+}
+
+function mediaMatchesContentType(item, contentType) {
+  if (!contentType || contentType === 'all') return true;
+  const product = String(item.media_product_type || '').toUpperCase();
+  const mediaType = String(item.media_type || '').toUpperCase();
+  if (contentType === 'reels') return product === 'REELS';
+  if (contentType === 'posts') return product !== 'REELS' && ['IMAGE', 'VIDEO', 'CAROUSEL_ALBUM', 'FEED'].includes(mediaType || product);
+  return true;
+}
+
+async function listInstagramMedia({igUserId, accessToken, from, to, includeTopContent, limit = 100}) {
+  const fields = includeTopContent
+    ? 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,media_url,like_count,comments_count'
+    : 'id,media_type,media_product_type,timestamp';
+  const media = [];
+  let after = null;
+  for (let page = 0; page < 10; page++) {
+    const params = {fields, limit: Math.min(Math.max(Number(limit) || 100, 1), 100)};
+    if (after) params.after = after;
+    const res = await igRequest(`${igUserId}/media`, {params, accessToken});
+    const items = res.data || [];
+    if (!items.length) break;
+    for (const item of items) {
+      if (inDateRange(item.timestamp, from, to)) media.push(item);
+    }
+    const oldest = items[items.length - 1]?.timestamp;
+    if (from && oldest && String(oldest).slice(0, 10) < from) break;
+    after = res.paging?.cursors?.after;
+    if (!after) break;
+  }
+  return media;
+}
+
+async function getInstagramPlatformReport({accountId, accountMeta, secrets, from = '', to = '', includeTopContent = false, contentType = 'all'}) {
   const igUserId = accountMeta.igUserId;
   if (!igUserId) throw new Error(`No Instagram Business Account ID saved for "${accountId}"`);
   if (!secrets.instagramAccessToken) throw new Error('INSTAGRAM_ACCESS_TOKEN secret is not configured');
@@ -204,29 +321,12 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
   const accessToken = resolveAccessToken(secrets.instagramAccessToken, igUserId);
   if (!accessToken) throw new Error(`No usable access token found for "${accountId}" (igUserId ${igUserId}).`);
 
-  const mediaRes = await igRequest(`${igUserId}/media`, {
-    params: {
-      fields: 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,media_url,like_count,comments_count',
-      limit: Math.min(Math.max(Number(limit) || 50, 1), 100)
-    },
-    accessToken
-  });
-
-  const media = (mediaRes.data || []).filter(item => inDateRange(item.timestamp, from, to));
+  const media = await listInstagramMedia({igUserId, accessToken, from, to, includeTopContent});
   const rows = [];
-  const totals = {
-    views: 0,
-    impressions: 0,
-    likes: 0,
-    comments: 0,
-    saves: 0,
-    shares: 0,
-    publishedContent: media.length,
-    reach: 0,
-    totalInteractions: 0
-  };
+  const accountInsights = await getAccountInsights({igUserId, accessToken, from, to});
 
-  for (const item of media) {
+  const topCandidates = includeTopContent ? media.filter(item => mediaMatchesContentType(item, contentType)) : [];
+  for (const item of topCandidates) {
     let insights = null;
     let error = null;
     try {
@@ -235,23 +335,14 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
       error = e.message || String(e);
     }
 
-    const likes = Number(item.like_count || metricValue(insights, 'likes'));
-    const comments = Number(item.comments_count || metricValue(insights, 'comments'));
-    const shares = metricValue(insights, 'shares');
-    const saves = metricValue(insights, 'saved');
-    const views = metricValue(insights, 'views') || metricValue(insights, 'video_views');
+    const likes = Number(item.like_count ?? metricValue(insights, 'likes') ?? 0);
+    const comments = Number(item.comments_count ?? metricValue(insights, 'comments') ?? 0);
+    const shares = metricValue(insights, 'shares') ?? 0;
+    const saves = metricValue(insights, 'saved') ?? metricValue(insights, 'saves') ?? 0;
+    const views = metricValue(insights, 'views') ?? metricValue(insights, 'video_views') ?? 0;
     const impressions = metricValue(insights, 'impressions');
     const reach = metricValue(insights, 'reach');
-    const totalInteractions = metricValue(insights, 'total_interactions') || metricValue(insights, 'engagement') || (likes + comments + shares + saves);
-
-    totals.views += views;
-    totals.impressions += impressions;
-    totals.likes += likes;
-    totals.comments += comments;
-    totals.saves += saves;
-    totals.shares += shares;
-    totals.reach += reach;
-    totals.totalInteractions += totalInteractions;
+    const totalInteractions = metricValue(insights, 'total_interactions') ?? metricValue(insights, 'engagement') ?? (likes + comments + shares + saves);
 
     rows.push({
       id: item.id,
@@ -273,7 +364,22 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
   }
 
   rows.sort((a, b) => (b.views || b.totalInteractions || 0) - (a.views || a.totalInteractions || 0));
-  return {ok: true, platform: 'instagram', accountId, igUserId, from, to, totals, rows: rows.slice(0, 10), fetchedContent: media.length};
+  return {
+    ok: true,
+    platform: 'instagram',
+    accountId,
+    igUserId,
+    from,
+    to,
+    totals: {...accountInsights.totals, publishedContent: media.length},
+    overviewSource: 'account_insights',
+    topContentLoaded: !!includeTopContent,
+    contentType,
+    unavailableMetrics: accountInsights.unavailable,
+    rawOverviewMetrics: accountInsights.rawMetricNames,
+    rows: rows.slice(0, 10),
+    fetchedContent: media.length
+  };
 }
 
 /**

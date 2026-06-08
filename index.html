@@ -85,7 +85,7 @@
       <button class="btn" id="openPostingBtn" style="display:none">Posting</button>
       <button class="btn btn-primary" id="openAddBtn">+ New</button>
       <button class="btn" id="openSettingsBtn" style="display:none">Settings</button>
-      <span id="syncDot" style="width:6px;height:6px;border-radius:50%;background:var(--border2);display:inline-block;flex-shrink:0;transition:background 0.4s" title="Sync status"></span>
+      <span id="syncDot" style="width:8px;height:8px;border-radius:50%;background:var(--border2);display:inline-block;flex-shrink:0;transition:background 0.4s;cursor:pointer" title="Sync status — click to refresh"></span>
       <div class="account-menu-wrap" id="accountMenuWrap">
         <button class="user-avatar" id="userAvatar" type="button" aria-haspopup="menu" aria-expanded="false" title="Account">?</button>
         <div class="account-menu" id="accountMenu" role="menu" aria-label="Account menu">
@@ -179,10 +179,9 @@
       <button class="report-tab" data-report-tab="platforms" id="platformReportTabBtn" style="display:none">Platforms report</button>
     </div>
     <select class="report-platform-select" id="platformReportAccount" style="display:none"></select>
-    <button class="period-btn active" data-period="all">All time</button>
     <button class="period-btn" data-period="today">Today</button>
     <button class="period-btn" data-period="week">This week</button>
-    <button class="period-btn" data-period="month">This month</button>
+    <button class="period-btn active" data-period="month">This month</button>
     <button class="period-btn" data-period="custom">Custom</button>
     <div class="report-custom-dates" id="reportCustomDates" style="display:none">
       <input class="report-date-input" type="date" id="reportFromDate">
