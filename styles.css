@@ -381,6 +381,19 @@ select.filter{background:var(--bg3);border:1px solid var(--border);border-radius
 .posting-status.partial{background:rgba(232,168,59,0.15);color:#e8a83b}
 .posting-show-more-btn{width:100%;padding:9px;background:transparent;border:1px dashed var(--border);border-radius:var(--radius);color:var(--text3);font-size:12px;cursor:pointer;transition:background .15s,color .15s}
 .posting-show-more-btn:hover{background:var(--bg3);color:var(--text)}
+.posting-queue-actions{display:flex;gap:6px;flex-shrink:0;margin-left:auto}
+.posting-edit-btn,.posting-cancel-btn{font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
+.posting-edit-btn{background:transparent;color:var(--text3)}.posting-edit-btn:hover{background:var(--bg3);color:var(--text)}
+.posting-cancel-btn{background:transparent;color:#f87171;border-color:rgba(248,113,113,.3)}.posting-cancel-btn:hover{background:rgba(248,113,113,.1)}
+.posting-queue-item--editing{flex-wrap:wrap;align-items:flex-start}
+.posting-edit-form{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.posting-edit-input{background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:4px 8px;outline:none}
+.posting-edit-input:focus{border-color:var(--accent)}
+.posting-edit-actions{display:flex;gap:6px}
+.posting-edit-save-btn{font-size:11px;padding:4px 12px;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-weight:500}
+.posting-edit-save-btn:hover{opacity:.88}
+.posting-edit-discard-btn{font-size:11px;padding:4px 10px;border-radius:6px;background:transparent;color:var(--text3);border:1px solid var(--border);cursor:pointer}
+.posting-edit-discard-btn:hover{background:var(--bg3);color:var(--text)}
 
 .posting-compose-preview{display:flex;align-items:center;gap:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:18px}
 .posting-compose-preview .posting-queue-thumb{width:56px;height:56px}

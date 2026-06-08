@@ -2205,6 +2205,7 @@ const POSTING_SHOW_CONNECT_UI=true;
 let postingReadyCards=[];
 let postingQueue=[]; // persisted — {id, card, destinations:[ids], caption, mode:'now'|'schedule', scheduledAt, status, error, publishedAt}
 let postingQueueVisible=5; // how many queue items to show before "Show more"
+let editingJobId=null;    // id of the queue item currently showing the inline edit form
 let postingComposeCard=null;
 let postingSelectedDest=new Set();
 let postingWhenMode='now';
@@ -2400,6 +2401,7 @@ function renderPostingQueue(){
   const sorted=[...postingQueue].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const visible=sorted.slice(0,postingQueueVisible);
   const remaining=sorted.length-postingQueueVisible;
+  const canEdit=s=>s==='scheduled'||s==='queued';
   list.innerHTML=visible.map(item=>{
     const c=item.card;
     const thumb=postingThumbSrc(c);
@@ -2411,6 +2413,34 @@ function renderPostingQueue(){
     const statusCls=item.status==='published'?'published':item.status==='partial'?'partial':item.status==='failed'?'failed':item.status==='publishing'?'publishing':'scheduled';
     const ytLine=item.youtube&&item.destinations.includes('youtube')
       ?`<div class="posting-queue-sub" style="margin-top:2px"><span style="color:var(--text3)">YouTube:</span> <span>${escHtml(item.youtube.title||'Untitled')}</span>${item.youtube.tags&&item.youtube.tags.length?`<span style="color:var(--text3)"> · tags: ${escHtml(item.youtube.tags.join(', '))}</span>`:''}</div>`
+      :'';
+
+    // Inline edit form — shown when user clicks Edit on a scheduled item
+    if(editingJobId===item.id&&item.status==='scheduled'){
+      const dt=new Date(item.scheduledAt||Date.now());
+      const dateVal=dt.toLocaleDateString('en-CA'); // YYYY-MM-DD
+      const timeVal=dt.toTimeString().slice(0,5);   // HH:MM
+      return`<div class="posting-queue-item posting-queue-item--editing">
+        <div class="posting-queue-thumb">${media}</div>
+        <div class="posting-queue-main">
+          <div class="posting-queue-title">${escHtml(c.name||'Untitled')}</div>
+          <div class="posting-edit-form">
+            <input type="date" class="posting-edit-input" id="editJobDate_${item.id}" value="${dateVal}">
+            <input type="time" class="posting-edit-input" id="editJobTime_${item.id}" value="${timeVal}">
+            <div class="posting-edit-actions">
+              <button class="posting-edit-save-btn" data-job-id="${item.id}">Save</button>
+              <button class="posting-edit-discard-btn" data-job-id="${item.id}">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const actionBtns=canEdit(item.status)
+      ?`<div class="posting-queue-actions">
+          ${item.status==='scheduled'?`<button class="posting-edit-btn" data-job-id="${item.id}">Edit</button>`:''}
+          <button class="posting-cancel-btn" data-job-id="${item.id}">Cancel</button>
+        </div>`
       :'';
     return`<div class="posting-queue-item">
       <div class="posting-queue-thumb">${media}</div>
@@ -2424,15 +2454,63 @@ function renderPostingQueue(){
         </div>
         ${ytLine}
       </div>
+      ${actionBtns}
     </div>`;
   }).join('')+(remaining>0
     ?`<button class="posting-show-more-btn" id="postingShowMoreBtn">Show ${Math.min(remaining,5)} more <span style="color:var(--text3)">(${remaining} remaining)</span></button>`
     :'');
+
+  // Wire up all queue actions via event delegation on the list
+  list.querySelectorAll('.posting-edit-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    editingJobId=btn.dataset.jobId; renderPostingQueue();
+  }));
+  list.querySelectorAll('.posting-cancel-btn').forEach(btn=>btn.addEventListener('click',()=>cancelPostingJob(btn.dataset.jobId)));
+  list.querySelectorAll('.posting-edit-save-btn').forEach(btn=>btn.addEventListener('click',()=>saveEditJob(btn.dataset.jobId)));
+  list.querySelectorAll('.posting-edit-discard-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    editingJobId=null; renderPostingQueue();
+  }));
   if(remaining>0){
     document.getElementById('postingShowMoreBtn').addEventListener('click',()=>{
-      postingQueueVisible+=5;
-      renderPostingQueue();
+      postingQueueVisible+=5; renderPostingQueue();
     });
+  }
+}
+
+async function cancelPostingJob(id){
+  if(!confirm('Cancel this post?'))return;
+  try{
+    initFirebaseBackend();
+    await firebaseDb.collection('board').doc('postingQueue').collection('items').doc(id).delete();
+    postingQueue=postingQueue.filter(item=>item.id!==id);
+    if(editingJobId===id)editingJobId=null;
+    renderPostingQueue();
+    showToast('Post cancelled','success');
+  }catch(e){
+    showToast('Could not cancel: '+e.message,'error');
+  }
+}
+
+async function saveEditJob(id){
+  const dateEl=document.getElementById('editJobDate_'+id);
+  const timeEl=document.getElementById('editJobTime_'+id);
+  if(!dateEl||!timeEl)return;
+  const scheduledAt=new Date(dateEl.value+'T'+timeEl.value).getTime();
+  if(!scheduledAt||isNaN(scheduledAt)||scheduledAt<=Date.now()){
+    showToast('Pick a time in the future','error');return;
+  }
+  try{
+    initFirebaseBackend();
+    await firebaseDb.collection('board').doc('postingQueue').collection('items').doc(id).update({
+      scheduledAt,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    const idx=postingQueue.findIndex(item=>item.id===id);
+    if(idx!==-1)postingQueue[idx]={...postingQueue[idx],scheduledAt};
+    editingJobId=null;
+    renderPostingQueue();
+    showToast('Schedule updated','success');
+  }catch(e){
+    showToast('Could not update: '+e.message,'error');
   }
 }
 
@@ -2607,7 +2685,7 @@ async function confirmPostingCompose(){
 
 async function openPosting(){
   if(!canManageSettings()){showToast('Posting is restricted to admins','error');return;}
-  postingQueueVisible=5; // reset pagination each time the overlay opens
+  postingQueueVisible=5; editingJobId=null; // reset pagination + edit state each time
   document.getElementById('postingOverlay').classList.add('open');
   await loadPostingSocialAccounts();
   await loadPostingQueue();
