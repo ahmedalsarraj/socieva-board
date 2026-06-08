@@ -2831,7 +2831,11 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
   cards=cards.filter(c=>c.id!==editId);
   closeModal();renderAll();
   pendingDelete={card:cardToDelete,index:originalIndex,timer:setTimeout(async()=>{
-    pendingDelete=null;
+    // Keep pendingDelete set (non-null) until saveData() resolves so that
+    // boardUiBusy() stays true throughout the async write. If we cleared it
+    // first, any Firestore snapshot that arrived during the save would see
+    // boardUiBusy()===false, apply the old remote state (card still present),
+    // and bring the card back before the delete even reached Firestore.
     try{
       await saveData();
       await deleteStorageItems(cardFileItemIds(cardToDelete));
@@ -2840,7 +2844,7 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
       renderAll();
       showToast('Delete failed: '+e.message,'error');
     }
-    finally{flushPendingSnapshot();}
+    finally{pendingDelete=null;flushPendingSnapshot();}
   },5000)};
   showToastUndo('"'+cardToDelete.name+'" deleted');
 });
