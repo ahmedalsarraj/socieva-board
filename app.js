@@ -2147,10 +2147,10 @@ function assignFileState(card){
   card.thumbUrl=isC?(carouselImages[0]?.shareUrl||null):thumbFileUrl;
   card.thumbItemId=isC?(carouselImages[0]?.itemId||null):thumbItemId;
   card.thumbDisplayUrl=isC?(carouselImages[0]?.downloadUrl||null):thumbDisplayUrl;
-  card.vidUrl=isC?undefined:vidFileUrl;
-  card.vidItemId=isC?undefined:vidItemId;
-  card.vidDisplayUrl=isC?undefined:vidDisplayUrl;
-  card.images=isC?carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})):undefined;
+  card.vidUrl=isC?null:vidFileUrl;
+  card.vidItemId=isC?null:vidItemId;
+  card.vidDisplayUrl=isC?null:vidDisplayUrl;
+  card.images=isC?carouselImages.map(img=>({shareUrl:img.shareUrl,itemId:img.itemId||null,downloadUrl:img.downloadUrl||null})):null;
 }
 
 document.getElementById('saveBtn').addEventListener('click',async()=>{
@@ -2177,7 +2177,7 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
     compliance:document.getElementById('fCompliance').value,
     approve:document.getElementById('fApprove').value,
     stage:parseInt(document.getElementById('fStage').value),
-    slidesCount:boardMode==='carousels'?(parseInt(document.getElementById('fSlidesCount').value)||null):undefined
+    slidesCount:boardMode==='carousels'?(parseInt(document.getElementById('fSlidesCount').value)||null):null
   };
   assignFileState(card);
   applyStageAudit(card,existingCard);
