@@ -20,25 +20,6 @@
   <div class="lightbox-label" id="lightboxLabel"></div>
 </div>
 
-<!-- MS CONNECT SCREEN (admin setup, shown when OneDrive not linked) -->
-<div class="auth-screen" id="msConnectScreen">
-  <div class="login-card">
-    <div class="login-logo">Socieva Studio</div>
-    <div class="login-title">Service Setup</div>
-    <div class="login-sub">Unable to reach the storage service. Please check your connection and try again.</div>
-    <button class="btn-auth" id="msConnectBtn">
-      <svg class="ms-icon" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
-        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
-        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
-        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
-      </svg>
-      Connect Service Account
-    </button>
-    <div class="auth-error" id="msConnectError" style="margin-top:10px"></div>
-  </div>
-</div>
-
 <!-- INTERNAL LOGIN SCREEN -->
 <div class="auth-screen" id="loginScreen">
   <div class="login-card">
@@ -54,12 +35,12 @@
   </div>
 </div>
 
-<!-- CHANGE PASSWORD SCREEN -->
+<!-- CHANGE PASSWORD SCREEN (forced when admin flags the account) -->
 <div class="auth-screen" id="changePwScreen">
   <div class="login-card">
     <div class="login-logo">Socieva Studio</div>
-    <div class="login-title">Set New Password</div>
-    <div class="login-sub">Welcome, <strong id="changePwUsername"></strong>. You must set a new password before continuing.</div>
+    <div class="login-title">Set a new password</div>
+    <div class="login-sub">Welcome, <strong id="changePwUsername"></strong>. For security, please set a new password before continuing.</div>
     <label class="auth-label">New password</label>
     <input class="auth-input" type="password" id="changePwNew" placeholder="Min. 8 characters" autocomplete="new-password">
     <label class="auth-label">Confirm password</label>
@@ -101,10 +82,24 @@
         <button class="sort-dir-btn" id="sortDirBtn" title="Toggle sort direction">↑</button>
       </div>
       <button class="btn" id="openReportsBtn">Reports</button>
+      <button class="btn" id="openPostingBtn" style="display:none">Posting</button>
       <button class="btn btn-primary" id="openAddBtn">+ New</button>
       <button class="btn" id="openSettingsBtn" style="display:none">Settings</button>
       <span id="syncDot" style="width:6px;height:6px;border-radius:50%;background:var(--border2);display:inline-block;flex-shrink:0;transition:background 0.4s" title="Sync status"></span>
-<div class="user-avatar" id="userAvatar" title="Sign out">?</div>
+      <div class="account-menu-wrap" id="accountMenuWrap">
+        <button class="user-avatar" id="userAvatar" type="button" aria-haspopup="menu" aria-expanded="false" title="Account">?</button>
+        <div class="account-menu" id="accountMenu" role="menu" aria-label="Account menu">
+          <div class="account-menu-head">
+            <div class="account-menu-avatar" id="accountMenuAvatar">?</div>
+            <div class="account-menu-meta">
+              <div class="account-menu-name" id="accountMenuName">User</div>
+              <div class="account-menu-email" id="accountMenuEmail">-</div>
+            </div>
+          </div>
+          <div class="account-menu-role" id="accountMenuRole">User</div>
+          <button class="account-menu-logout" id="accountLogoutBtn" type="button" role="menuitem">Log out</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -196,6 +191,93 @@
     <button class="report-close-btn" id="closeReportsBtn">✕</button>
   </div>
   <div class="reports-body" id="reportsBody"></div>
+</div>
+
+<!-- POSTING OVERLAY -->
+<div class="reports-overlay" id="postingOverlay">
+  <div class="reports-header">
+    <span class="reports-title">Posting</span>
+    <div class="posting-accounts" id="postingAccountsBar"></div>
+    <button class="report-close-btn" id="closePostingBtn">✕</button>
+  </div>
+  <div class="reports-body" id="postingBody">
+    <div class="section-title" style="border-top:none;padding-top:0;margin-top:0">Ready to post</div>
+    <div class="settings-help">Content that has reached the "Ready to post" stage on the Videos and Carousels boards. Click an item to choose where and when to publish it.</div>
+    <div class="posting-grid" id="postingReadyGrid"></div>
+
+    <div class="section-title">Queue &amp; history</div>
+    <div class="settings-help" id="postingQueueNote">Scheduled, published, and failed posts. (Demo data — not yet connected to real publishing.)</div>
+    <div class="posting-queue" id="postingQueueList"></div>
+  </div>
+</div>
+
+<!-- POSTING COMPOSE MODAL -->
+<div class="modal-bg" id="postingComposeBg">
+<div class="modal" style="width:620px">
+  <div class="modal-header">
+    <span class="modal-title">Publish</span>
+    <button class="modal-close" id="closePostingComposeBtn">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="posting-compose-preview" id="postingComposePreview"></div>
+
+    <div class="section-title">Caption</div>
+    <div class="settings-help" id="postingCaptionHelp">Pulled automatically from the ticket's SEO title &amp; description. Edit as needed — the same text is sent to every selected destination.</div>
+    <textarea class="settings-input posting-caption" id="postingCaption" rows="5" placeholder="Write a caption..."></textarea>
+    <div class="posting-caption-count" id="postingCaptionCount"></div>
+
+    <div class="section-title">Publish to</div>
+    <div class="settings-help">Select one or more connected accounts.</div>
+    <div class="posting-dest-group" id="postingDestGroup"></div>
+
+    <div id="postingYoutubeFields" style="display:none">
+      <div class="section-title" style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">YouTube details</div>
+      <div class="settings-help">YouTube doesn't use the caption above — it publishes with its own title, description and tags.</div>
+      <div class="field"><label>Title</label><input type="text" class="settings-input" id="postingYtTitle" placeholder="Video title shown on YouTube" maxlength="100"></div>
+      <div class="field" style="margin-top:10px"><label>Description</label><textarea class="settings-input" id="postingYtDescription" rows="4" placeholder="Video description shown on YouTube"></textarea></div>
+      <div class="field" style="margin-top:10px"><label>Tags</label><input type="text" class="settings-input" id="postingYtTags" placeholder="Comma-separated, e.g. trading, gold, capital.com"></div>
+      <div class="settings-help" id="postingYtError" style="color:#f87171"></div>
+    </div>
+
+    <div class="section-title">When</div>
+    <div class="posting-when-row">
+      <div class="fp-pill-group" id="postingWhenGroup">
+        <button class="fp-pill active" data-val="now">Publish now</button>
+        <button class="fp-pill" data-val="schedule">Schedule</button>
+      </div>
+      <div class="posting-schedule-inputs" id="postingScheduleInputs" style="display:none">
+        <input class="settings-input" type="date" id="postingScheduleDate">
+        <input class="settings-input" type="time" id="postingScheduleTime">
+      </div>
+    </div>
+    <div class="posting-error" id="postingComposeError"></div>
+  </div>
+  <div class="modal-footer">
+    <span style="font-size:11px;color:var(--text3)" id="postingComposeNote"></span>
+    <button class="btn btn-primary" id="postingConfirmBtn">Publish</button>
+  </div>
+</div>
+</div>
+
+<!-- CONNECT INSTAGRAM MODAL -->
+<div class="modal-bg" id="connectIgBg">
+<div class="modal" style="width:480px">
+  <div class="modal-header">
+    <span class="modal-title">Connect Instagram account</span>
+    <button class="modal-close" id="closeConnectIgBtn">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="settings-help" id="connectIgAccountLabel"></div>
+    <div class="section-title" style="border-top:none;padding-top:0;margin-top:0">Instagram Business Account ID</div>
+    <div class="settings-help">The numeric ID of the Instagram professional account connected to your Facebook Page. Access tokens are intentionally not stored in the browser; configure them later as backend secrets.</div>
+    <input type="text" class="settings-input" id="connectIgUserId" placeholder="e.g. 17841400000000000">
+    <div class="posting-error" id="connectIgError"></div>
+  </div>
+  <div class="modal-footer">
+    <span style="font-size:11px;color:var(--text3)" id="connectIgNote">This saves metadata only. Real publishing must run through Cloud Functions.</span>
+    <button class="btn btn-primary" id="connectIgSaveBtn">Save connection</button>
+  </div>
+</div>
 </div>
 
 <!-- VIDEO MODAL -->
@@ -338,16 +420,8 @@
 
     <!-- USER ACCOUNTS (admin only) -->
     <div class="section-title" style="border-top:none;padding-top:0;margin-top:0">User accounts</div>
-    <div class="settings-help">Manage login accounts. Password resets restore the default password and force a change on next login.</div>
+    <div class="settings-help">Manage login accounts and roles.</div>
     <div class="settings-list" id="usersSettingsList"></div>
-    <div class="users-add-row">
-      <input class="settings-input" type="text" id="newUserNameInput" placeholder="Username (lowercase)" autocapitalize="none">
-      <select class="settings-input" id="newUserRoleInput">
-        <option value="user">User</option>
-        <option value="admin">Admin</option>
-      </select>
-      <button class="btn" id="addUserBtn">+ Add</button>
-    </div>
 
     <!-- PEOPLE & ROLES -->
     <div class="section-title">People &amp; roles</div>
@@ -366,16 +440,6 @@
       <input class="settings-input" type="text" id="newCategoryName" placeholder="Category name">
       <button class="btn" id="addCategoryBtn">+ Add category</button>
     </div>
-
-    <!-- MIGRATION -->
-    <div class="section-title" id="migrationSectionTitle" style="display:none">Migration</div>
-    <div class="settings-help" id="migrationHelp" style="display:none">
-      Copy legacy OneDrive board data and files into Firebase. OneDrive data is kept as backup.
-    </div>
-    <div class="settings-add-row" id="migrationActions" style="display:none">
-      <button class="btn" id="migrateFirebaseBtn" type="button">Migrate OneDrive to Firebase</button>
-    </div>
-    <div class="upload-status" id="migrationStatus" style="text-align:left;margin-top:8px"></div>
   </div>
   <div class="modal-footer">
     <button class="btn" id="cancelSettingsBtn">Cancel</button>

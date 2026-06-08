@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function activeUser() {
+      return signedIn()
+        && userDoc(request.auth.uid).data.active == true;
+    }
+
+    function adminUser() {
+      return activeUser()
+        && userDoc(request.auth.uid).data.role == "admin";
+    }
+
+    match /users/{userId} {
+      allow get: if signedIn() && (request.auth.uid == userId || adminUser());
+      allow list: if adminUser();
+      allow create, delete: if adminUser();
+      allow update: if adminUser()
+        || (
+          signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(["mustChangePassword"])
+          && request.resource.data.mustChangePassword == false
+        );
+    }
+
+    match /board/{docId} {
+      allow read: if activeUser() && docId in ["videos", "carousels"];
+      allow write: if activeUser() && docId in ["videos", "carousels"];
+
+      allow read, write: if adminUser() && docId in ["socialAccounts", "postingQueue"];
+    }
+  }
+}

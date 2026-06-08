@@ -14,7 +14,6 @@ Live domain:
 | Auth | Firebase Authentication, Email/Password |
 | Database | Cloud Firestore |
 | File storage | Firebase Storage |
-| Legacy fallback | OneDrive / Microsoft Graph remains in code for migration and rollback |
 
 No build step is required.
 
@@ -32,6 +31,8 @@ Main Firestore documents:
 | --- | --- |
 | `board/videos` | Video board cards and settings |
 | `board/carousels` | Carousel board cards |
+| `board/socialAccounts` | Non-secret posting account metadata, admin-only |
+| `board/postingQueue` | Posting queue and history, admin-only |
 | `users/{uid}` | User profile, role, and active flag |
 
 Storage paths:
@@ -40,7 +41,6 @@ Storage paths:
 | --- | --- |
 | `uploads/thumbnails/` | Thumbnail and carousel image uploads |
 | `uploads/videos/` | Final video uploads |
-| `system/` | Reserved for admin/system files |
 
 ## Users And Roles
 
@@ -88,57 +88,36 @@ http://localhost:4173
 
 Firebase Auth must allow `localhost` as an authorized domain. Firebase usually includes it by default.
 
-### Local Mode
+The app is Firebase-only. Local development still talks to the configured Firebase project, so test with non-production content when possible.
 
-Local mode bypasses Firebase and OneDrive, and stores test data in `localStorage`.
+## Security Rules
 
-Enable:
+Source-controlled rules live in:
 
-```js
-localStorage.setItem('sb_local_mode', '1');
-location.reload();
+```text
+firestore.rules
+storage.rules
+firebase.json
 ```
 
-Disable:
+Deploy rules from the Firebase CLI after review:
 
-```js
-localStorage.removeItem('sb_local_mode');
-location.reload();
+```bash
+firebase deploy --only firestore:rules,storage
 ```
 
-Reset local test data:
+Keep `board/socialAccounts` and `board/postingQueue` admin-only. Platform access tokens must not be stored in Firestore or frontend code.
 
-```js
-Object.keys(localStorage)
-  .filter(k => k.startsWith('sb_data_'))
-  .forEach(k => localStorage.removeItem(k));
-location.reload();
-```
+## Posting
 
-## Storage Provider Switch
-
-Firebase is the default provider.
-
-To force legacy OneDrive fallback in a browser:
-
-```js
-localStorage.setItem('sb_storage_provider', 'onedrive');
-location.reload();
-```
-
-To return to Firebase:
-
-```js
-localStorage.removeItem('sb_storage_provider');
-location.reload();
-```
+The browser only creates posting jobs and saves non-secret account metadata. Real publishing to Instagram, YouTube, or TikTok must run through Cloud Functions or another backend service that stores API tokens as backend secrets.
 
 ## Deploy
 
 GitHub Pages deploys from `main`.
 
 ```bash
-git add index.html styles.css app.js README.md
+git add index.html styles.css app.js README.md firestore.rules storage.rules firebase.json
 git commit -m "Connect board to Firebase"
 git push origin main
 ```
@@ -171,14 +150,4 @@ Run this after deployment:
 
 ## Migration Status
 
-New data and new uploads use Firebase.
-
-Existing OneDrive files are not migrated automatically. A migration tool is still needed to:
-
-1. Read legacy OneDrive board data.
-2. Download each legacy file.
-3. Upload it to Firebase Storage.
-4. Rewrite card file references.
-5. Save the migrated cards to Firestore.
-
-Do not delete OneDrive data until migration is verified.
+New data and new uploads use Firebase. Legacy data should stay archived until migrated content is verified in Firestore and Firebase Storage.

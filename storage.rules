@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return firestore.get(/databases/(default)/documents/users/$(uid));
+    }
+
+    function activeUser() {
+      return signedIn()
+        && userDoc(request.auth.uid).data.active == true;
+    }
+
+    match /uploads/{allPaths=**} {
+      allow read, write, delete: if activeUser();
+    }
+  }
+}
