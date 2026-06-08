@@ -1617,26 +1617,40 @@ async function downloadUpload(type){
     }catch(e){}
   }
   if(!url){showToast('No file to download','error');return;}
-  // Use an <a download> click rather than window.open():
-  //   - window.open(video_url) → browser sees a video MIME type, fires up its
-  //     media player, and ignores Content-Disposition: attachment entirely.
-  //   - <a download> routes straight to the browser's download mechanism and
-  //     bypasses the media-player decision, so videos (and everything else)
-  //     save to disk instead of playing inline.
-  // No fetch()/blob involved — just a link click — so ad-blockers/VPNs that
-  // block fetch() to googleapis.com can't interfere.
   const cleanName=itemId
     ?String(itemId).split('/').pop().replace(/^\d+_[a-z0-9]+_/i,'')||'file'
     :'file';
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=cleanName;
-  a.style.display='none';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setPlainStatus(statusEl,'Download started — check your browser\'s downloads.');
-  showToast('Download started','success');
+  // Best approach for forcing video (and all file) downloads:
+  //   fetch → blob → blob URL → <a download> click.
+  // A blob: URL is same-origin, so browsers can't ignore the `download`
+  // attribute (they only ignore it for cross-origin hrefs). This bypasses
+  // the browser's media-player decision for videos entirely.
+  // If fetch is blocked (ad-blocker / VPN / network error), we fall back
+  // to a plain link click with target=_blank — at least the board page
+  // isn't destroyed, and Content-Disposition:attachment on the Storage URL
+  // should still trigger a save dialog in most browsers.
+  try{
+    setPlainStatus(statusEl,'Downloading…');
+    const resp=await fetch(url);
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const blob=await resp.blob();
+    const blobUrl=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=blobUrl;a.download=cleanName;a.style.display='none';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(blobUrl),60000);
+    setPlainStatus(statusEl,'Download started — check your browser\'s downloads.');
+    showToast('Download started','success');
+  }catch(e){
+    // fetch blocked or failed — open in a new tab; Content-Disposition:
+    // attachment (set above via updateMetadata) should trigger a save dialog.
+    const a=document.createElement('a');
+    a.href=url;a.download=cleanName;a.target='_blank';a.rel='noopener';
+    a.style.display='none';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setPlainStatus(statusEl,'Download started — check your browser\'s downloads.');
+    showToast('Download started','success');
+  }
 }
 
 async function removeUpload(type){
