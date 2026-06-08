@@ -265,7 +265,11 @@ async function firebaseUploadBlobWithProgress(blob,filename,subfolder,onProgress
   const safeName=String(filename||'file').replace(/[^\w.\-]+/g,'_').slice(-140)||'file';
   const path=`uploads/${subfolder}/${Date.now()}_${uid()}_${safeName}`;
   const ref=firebaseStorage.ref(path);
-  const task=ref.put(blob,{contentType:contentType||blob.type||'application/octet-stream'});
+  // contentDisposition:'attachment' tells the browser to save the file
+  // straight to disk instead of opening/previewing it inline — this is what
+  // makes the download button trigger a real browser download immediately,
+  // with no fetch()/blob plumbing (and so nothing for ad-blockers to break).
+  const task=ref.put(blob,{contentType:contentType||blob.type||'application/octet-stream',contentDisposition:`attachment; filename="${safeName}"`});
   const snap=await new Promise((resolve,reject)=>{
     task.on('state_changed',s=>{
       if(s.totalBytes)onProgress?.(Math.max(1,Math.round((s.bytesTransferred/s.totalBytes)*100)));
@@ -1600,19 +1604,31 @@ async function downloadUpload(type){
       url=await firebaseRefreshDownloadUrl(itemId);
       if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
     }catch(e){}
+    // Make sure the file is served with Content-Disposition: attachment so the
+    // browser saves it straight to disk instead of opening/previewing it. New
+    // uploads get this set at upload time; this patches older files that were
+    // uploaded before that existed, so the "instant download" behavior applies
+    // to everything, not just new files. Best-effort — if it fails (e.g. an
+    // older/cached token without write scope) we still fall through to opening
+    // the file, same as before.
+    try{
+      const cleanName=String(itemId).split('/').pop().replace(/^\d+_[a-z0-9]+_/i,'')||'file';
+      await firebaseStorage.ref(itemId).updateMetadata({contentDisposition:`attachment; filename="${cleanName}"`});
+    }catch(e){}
   }
   if(!url){showToast('No file to download','error');return;}
-  // Open the file directly rather than fetching it into a blob first — fetch()
-  // to googleapis.com gets blocked outright by some ad-blockers/VPNs/privacy
-  // extensions ("Failed to fetch"), but plain browser navigation isn't subject
-  // to that, so this is the version that actually works for everyone.
+  // Plain browser navigation (not fetch()+blob) so ad-blockers/VPNs/privacy
+  // extensions that block fetch() to googleapis.com ("Failed to fetch") can't
+  // get in the way — and now that the file's Content-Disposition is set to
+  // "attachment", this navigation triggers an immediate save-to-disk download
+  // rather than opening the file in the tab.
   const win=window.open(url,'_blank');
   if(win){
-    setPlainStatus(statusEl,'Opened in a new tab — use your browser\'s save/download option there.');
-    showToast('Opened in a new tab','success');
+    setPlainStatus(statusEl,'Download started — check your browser\'s downloads.');
+    showToast('Download started','success');
   }else{
-    setPlainStatus(statusEl,'Pop-up blocked — open the file directly:');
-    statusEl.innerHTML+=` <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:#3b82f6">Open file →</a>`;
+    setPlainStatus(statusEl,'Pop-up blocked — download the file directly:');
+    statusEl.innerHTML+=` <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:#3b82f6">Download file →</a>`;
     showToast('Allow pop-ups to download','error');
   }
 }
