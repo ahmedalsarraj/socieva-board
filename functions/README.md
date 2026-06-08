@@ -1,7 +1,7 @@
 # Posting queue worker (Cloud Functions)
 
 Backend half of the Posting feature. The browser only ever queues jobs to
-`board/postingQueue` and stores non-secret account metadata in
+`board/postingQueue/items/{jobId}` and stores non-secret account metadata in
 `board/socialAccounts` — this worker is what actually talks to the platforms,
 because that's the only place an access token should live.
 
@@ -60,7 +60,8 @@ console.log(result.data); // {checked, processed}
 
 1. Admin picks a "Ready to post" card in the Posting overlay, fills the
    compose modal, hits Publish/Schedule → `confirmPostingCompose()` in `app.js`
-   writes a job to `board/postingQueue` with `status: 'queued' | 'scheduled'`.
+   writes a job document to `board/postingQueue/items/{jobId}` with
+   `status: 'queued' | 'scheduled'`.
 2. This worker wakes up (scheduled or on-demand), finds due jobs
    (`queued`, or `scheduled` with `scheduledAt <= now`), flips them to
    `publishing` (so a second overlapping run can't double-post), then

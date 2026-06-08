@@ -32,7 +32,7 @@ Main Firestore documents:
 | `board/videos` | Video board cards and settings |
 | `board/carousels` | Carousel board cards |
 | `board/socialAccounts` | Non-secret posting account metadata, admin-only |
-| `board/postingQueue` | Posting queue and history, admin-only |
+| `board/postingQueue/items/{jobId}` | Posting queue and history, admin-only |
 | `users/{uid}` | User profile, role, and active flag |
 
 Storage paths:

@@ -3,7 +3,7 @@
  *
  * The browser (app.js / openPosting / confirmPostingCompose) only ever:
  *   - writes non-secret account metadata to  board/socialAccounts  (igUserId, connected)
- *   - writes posting jobs to                 board/postingQueue    ({status: 'queued' | 'scheduled', ...})
+ *   - writes posting jobs to                 board/postingQueue/items/{jobId}    ({status: 'queued' | 'scheduled', ...})
  *
  * It never sees or stores platform access tokens. This worker is the only
  * thing that holds the real Instagram access token (as a Firebase secret —
@@ -11,7 +11,7 @@
  *
  * Flow:
  *   1. A scheduled function wakes up every few minutes.
- *   2. It reads board/postingQueue, finds jobs that are due:
+ *   2. It reads board/postingQueue/items, finds jobs that are due:
  *        - status === 'queued'                       → publish now
  *        - status === 'scheduled' && scheduledAt <= now → publish now
  *   3. For each due job it dispatches to a per-platform publisher
@@ -66,6 +66,7 @@ const db = admin.firestore();
 const INSTAGRAM_ACCESS_TOKEN = defineSecret('INSTAGRAM_ACCESS_TOKEN');
 
 const QUEUE_DOC = db.collection('board').doc('postingQueue');
+const QUEUE_ITEMS = QUEUE_DOC.collection('items');
 const ACCOUNTS_DOC = db.collection('board').doc('socialAccounts');
 
 // Mirrors POSTING_ACCOUNTS in app.js just enough to know which platform an
@@ -141,28 +142,43 @@ async function runJob(job, secrets, accountsMeta) {
  * without waiting for the schedule to tick.
  */
 async function sweepQueue(secrets) {
-  const [queueSnap, accountsSnap] = await Promise.all([QUEUE_DOC.get(), ACCOUNTS_DOC.get()]);
-  if (!queueSnap.exists) return {checked: 0, processed: 0};
-
-  const items = Array.isArray(queueSnap.data()?.items) ? queueSnap.data().items : [];
+  const [jobsSnap, accountsSnap] = await Promise.all([
+    QUEUE_ITEMS.where('status', 'in', ['queued', 'scheduled']).limit(25).get(),
+    ACCOUNTS_DOC.get()
+  ]);
   const accountsMeta = accountsSnap.exists ? (accountsSnap.data() || {}) : {};
   const now = Date.now();
-  const dueIdx = items.map((job, i) => (isJobDue(job, now) ? i : -1)).filter(i => i !== -1);
+  const dueDocs = jobsSnap.docs.filter(doc => isJobDue({id: doc.id, ...doc.data()}, now));
 
-  if (!dueIdx.length) return {checked: items.length, processed: 0};
+  if (!dueDocs.length) return {checked: jobsSnap.size, processed: 0};
 
-  // Mark as in-flight first so a second overlapping run (e.g. manual trigger
-  // firing mid-schedule) doesn't double-publish the same job.
-  for (const i of dueIdx) items[i] = {...items[i], status: 'publishing'};
-  await QUEUE_DOC.set({items}, {merge: true});
+  let processed = 0;
+  for (const doc of dueDocs) {
+    const ref = doc.ref;
+    const lockedJob = await db.runTransaction(async tx => {
+      const latest = await tx.get(ref);
+      if (!latest.exists) return null;
+      const job = {id: latest.id, ...latest.data()};
+      if (!isJobDue(job, Date.now())) return null;
+      tx.update(ref, {
+        status: 'publishing',
+        processingStartedAt: Date.now(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      return {...job, status: 'publishing'};
+    });
+    if (!lockedJob) continue;
 
-  for (const i of dueIdx) {
-    items[i] = await runJob(items[i], secrets, accountsMeta);
+    const result = await runJob(lockedJob, secrets, accountsMeta);
+    await ref.set({
+      ...result,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, {merge: true});
+    processed++;
   }
-  await QUEUE_DOC.set({items}, {merge: true});
 
-  logger.info(`[posting] sweep done — ${dueIdx.length}/${items.length} job(s) processed`);
-  return {checked: items.length, processed: dueIdx.length};
+  logger.info(`[posting] sweep done — ${processed}/${jobsSnap.size} candidate job(s) processed`);
+  return {checked: jobsSnap.size, processed};
 }
 
 /**

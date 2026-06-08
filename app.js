@@ -56,7 +56,9 @@ let boardMode = 'videos'; // 'videos' | 'carousels'
 let carouselCards = [];
 let carouselLoaded = false;
 let transferGen = 0; // incremented on every resetModal() to cancel stale async callbacks
-let activeUploadPromise = null; // set while an upload is in-flight; save waits for it
+let activeUploadPromises = new Set(); // all in-flight modal uploads; save waits for every one
+let modalUploadedItems = new Set(); // files uploaded in the current modal session, deleted on cancel if unsaved
+let pendingFileDeletes = new Set(); // existing files to delete only after a successful save
 let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDb = null;
@@ -524,43 +526,25 @@ async function loadData(){
 
 async function saveData(){
   const ref=firebaseDb.collection('board').doc(firebaseBoardDoc());
-  // Stale boardRevision is common (e.g. a remote update arrived while the edit
-  // modal was open and got deferred — see applySyncedBoardPayload/boardUiBusy).
-  // On a mismatch, re-sync to the server's current revision and retry once
-  // before treating it as a genuine conflict — mirrors the 412 retry-once fix
-  // from the OneDrive backend (see "Fix false-positive 412 conflicts on save").
-  for(let attempt=0;attempt<2;attempt++){
-    const payload=boardMode==='carousels'?{version:1,cards}:buildBoardPayload();
-    try{
-      const nextRevision=await firebaseDb.runTransaction(async tx=>{
-        const snap=await tx.get(ref);
-        const remoteRevision=Number(snap.exists?(snap.data()?.revision||0):0);
-        if(remoteRevision!==boardRevision){
-          const e=new Error('revision-mismatch');
-          e.code='revision-mismatch';e.remoteRevision=remoteRevision;
-          throw e;
-        }
-        const revision=remoteRevision+1;
-        tx.set(ref,{
-          ...payload,
-          revision,
-          updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAtMs:Date.now(),
-          updatedBy:currentSession?.userId||null
-        },{merge:false});
-        return revision;
-      });
-      boardRevision=nextRevision;
-      cacheFirebaseBoardPayload(boardMode,{...payload,revision:nextRevision});
-      return;
-    }catch(e){
-      if(e.code==='revision-mismatch'){
-        if(attempt===0){boardRevision=e.remoteRevision;continue;}
-        throw new Error('This board changed in another session. Refresh and retry your edit.');
-      }
-      throw e;
+  const payload=boardMode==='carousels'?{version:1,cards}:buildBoardPayload();
+  const nextRevision=await firebaseDb.runTransaction(async tx=>{
+    const snap=await tx.get(ref);
+    const remoteRevision=Number(snap.exists?(snap.data()?.revision||0):0);
+    if(remoteRevision!==boardRevision){
+      throw new Error('This board changed in another session. Close this editor, review the latest board, then retry your edit.');
     }
-  }
+    const revision=remoteRevision+1;
+    tx.set(ref,{
+      ...payload,
+      revision,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAtMs:Date.now(),
+      updatedBy:currentSession?.userId||null
+    },{merge:false});
+    return revision;
+  });
+  boardRevision=nextRevision;
+  cacheFirebaseBoardPayload(boardMode,{...payload,revision:nextRevision});
 }
 
 async function switchBoardMode(mode){
@@ -1235,7 +1219,9 @@ function setPreview(type,url,name){
 
 function resetModal(){
   transferGen++; // invalidate any in-flight upload/download callbacks
-  activeUploadPromise = null; // abandon upload tracking for this modal session
+  activeUploadPromises = new Set(); // abandon upload tracking for this modal session
+  modalUploadedItems = new Set();
+  pendingFileDeletes = new Set();
   const isCarousel=boardMode==='carousels';
   thumbFileUrl=null;vidFileUrl=null;
   thumbItemId=null;vidItemId=null;
@@ -1263,6 +1249,47 @@ function resetModal(){
   document.getElementById('fNameError').textContent='';
   document.getElementById('fNameLabel').firstChild.textContent=isCarousel?'Carousel name ':'Video name ';
   ['thumbPreview','vidPreview'].forEach(id=>{const el=document.getElementById(id);el.style.display='none';el.innerHTML='';});
+}
+
+function trackUploadPromise(promise){
+  activeUploadPromises.add(promise);
+  promise.finally(()=>activeUploadPromises.delete(promise));
+  return promise;
+}
+
+async function waitForActiveUploads(){
+  const uploads=[...activeUploadPromises];
+  if(uploads.length)await Promise.allSettled(uploads);
+}
+
+function rememberUploadedItem(itemId){
+  if(itemId)modalUploadedItems.add(itemId);
+}
+
+function scheduleExistingFileDelete(itemId){
+  if(itemId)pendingFileDeletes.add(itemId);
+}
+
+function cardFileItemIds(card){
+  const ids=[card?.thumbItemId,card?.vidItemId];
+  if(Array.isArray(card?.images))card.images.forEach(img=>ids.push(img?.itemId));
+  return ids.filter(Boolean);
+}
+
+async function deleteStorageItems(itemIds){
+  const ids=[...new Set([...itemIds].filter(Boolean))];
+  await Promise.allSettled(ids.map(id=>firebaseDeleteFile(id)));
+}
+
+async function cleanupAbandonedModalFiles(){
+  await deleteStorageItems(modalUploadedItems);
+  modalUploadedItems.clear();
+}
+
+async function finalizeSavedModalFiles(){
+  await deleteStorageItems(pendingFileDeletes);
+  pendingFileDeletes.clear();
+  modalUploadedItems.clear();
 }
 
 function openAdd(stage){
@@ -1330,8 +1357,12 @@ function openEdit(id){
   });
 }
 
-function closeModal(){
+function closeModal({saved=false}={}){
   document.getElementById('modalBg').classList.remove('open');
+  if(!saved){
+    transferGen++;
+    cleanupAbandonedModalFiles().catch(()=>{});
+  }
   setTimeout(flushPendingSnapshot,0);
 }
 
@@ -1341,14 +1372,24 @@ async function handleUpload(file,type){
   const boxEl=document.getElementById(type+'Box');
   const linkEl=document.getElementById(type+'Link');
   let settle;
-  activeUploadPromise=new Promise(r=>{settle=r;});
+  trackUploadPromise(new Promise(r=>{settle=r;}));
   setTransferStatus(statusEl,'Uploading',0);
   boxEl.classList.add('uploading');
   try{
     const result=await uploadFileWithProgress(file,type==='thumb'?'thumbnails':'videos',pct=>{if(transferGen===gen)setTransferStatus(statusEl,'Uploading',pct);});
-    if(transferGen!==gen){boxEl.classList.remove('uploading');settle();activeUploadPromise=null;return;}
-    if(type==='thumb'){thumbFileUrl=result.shareUrl;thumbItemId=result.itemId;thumbDisplayUrl=result.downloadUrl;}
-    else{vidFileUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;}
+    if(transferGen!==gen){
+      if(result.itemId)firebaseDeleteFile(result.itemId).catch(()=>{});
+      boxEl.classList.remove('uploading');settle();return;
+    }
+    rememberUploadedItem(result.itemId);
+    if(type==='thumb'){
+      scheduleExistingFileDelete(thumbItemId);
+      thumbFileUrl=result.shareUrl;thumbItemId=result.itemId;thumbDisplayUrl=result.downloadUrl;
+    }
+    else{
+      scheduleExistingFileDelete(vidItemId);
+      vidFileUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;
+    }
     setPlainStatus(statusEl,'Uploaded ✓');
     const rl=safeUrl(result.shareUrl);
     linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View in Firebase →</a>`:'';
@@ -1358,7 +1399,6 @@ async function handleUpload(file,type){
   }catch(e){if(transferGen===gen){setPlainStatus(statusEl,'Upload failed: '+e.message,'error');showToast('Upload failed','error');}}
   boxEl.classList.remove('uploading');
   settle();
-  activeUploadPromise=null;
 }
 
 async function downloadUpload(type){
@@ -1404,14 +1444,9 @@ async function downloadUpload(type){
 
 async function removeUpload(type){
   const label = type==='thumb' ? 'thumbnail image' : 'video';
-  if(!confirm(`Delete the uploaded ${label} from Firebase? This cannot be undone.`)) return;
+  if(!confirm(`Remove the uploaded ${label} from this card? The file is deleted from Firebase only after you save.`)) return;
   const itemId = type==='thumb' ? thumbItemId : vidItemId;
-  if(itemId){
-    try{await firebaseDeleteFile(itemId);}
-    catch(e){
-      if(e.code!=='storage/object-not-found') return showToast('Delete failed: '+e.message,'error');
-    }
-  }
+  scheduleExistingFileDelete(itemId);
   if(type==='thumb'){
     thumbFileUrl=null;thumbItemId=null;thumbDisplayUrl=null;
     document.getElementById('thumbStatus').textContent='';
@@ -1427,7 +1462,7 @@ async function removeUpload(type){
     document.getElementById('vidActions').style.display='none';
     const p=document.getElementById('vidPreview');p.style.display='none';p.innerHTML='';
   }
-  showToast(`File deleted from Firebase`,'success');
+  showToast(`File will be removed after saving`,'success');
 }
 
 function renderCarouselImagesGrid(){
@@ -1448,7 +1483,8 @@ function renderCarouselImagesGrid(){
 }
 
 function removeCarouselImage(idx){
-  carouselImages.splice(idx,1);
+  const removed=carouselImages.splice(idx,1)[0];
+  scheduleExistingFileDelete(removed?.itemId);
   renderCarouselImagesGrid();
 }
 
@@ -1496,12 +1532,12 @@ async function handleCarouselImagesUpload(files){
   const boxEl=document.getElementById('carouselAddImgBox');
   const total=files.length;
   let settle;
-  activeUploadPromise=new Promise(r=>{settle=r;});
+  trackUploadPromise(new Promise(r=>{settle=r;}));
   setTransferStatus(statusEl,`Uploading 0/${total}`,0);
   boxEl.classList.add('uploading');
   let done=0;
   for(const file of files){
-    if(transferGen!==gen){boxEl.classList.remove('uploading');settle();activeUploadPromise=null;return;}
+    if(transferGen!==gen){boxEl.classList.remove('uploading');settle();return;}
     try{
       const result=await uploadFileWithProgress(file,'thumbnails',pct=>{
         if(transferGen!==gen)return;
@@ -1509,7 +1545,11 @@ async function handleCarouselImagesUpload(files){
         const part=typeof pct==='number'?Math.round(pct/total):0;
         setTransferStatus(statusEl,`Uploading ${done+1}/${total}`,Math.min(100,base+part));
       });
-      if(transferGen!==gen){boxEl.classList.remove('uploading');settle();activeUploadPromise=null;return;}
+      if(transferGen!==gen){
+        if(result.itemId)firebaseDeleteFile(result.itemId).catch(()=>{});
+        boxEl.classList.remove('uploading');settle();return;
+      }
+      rememberUploadedItem(result.itemId);
       carouselImages.push({shareUrl:result.shareUrl,itemId:result.itemId,downloadUrl:result.downloadUrl});
       done++;
       if(done<total)setTransferStatus(statusEl,`Uploading ${done}/${total}`,Math.round((done/total)*100));
@@ -1521,7 +1561,6 @@ async function handleCarouselImagesUpload(files){
   }
   boxEl.classList.remove('uploading');
   settle();
-  activeUploadPromise=null;
 }
 
 // ========== LIGHTBOX ==========
@@ -1759,20 +1798,27 @@ async function loadPostingSocialAccounts(){
 async function loadPostingQueue(){
   try{
     initFirebaseBackend();
-    const doc=await firebaseDb.collection('board').doc('postingQueue').get();
-    postingQueue=doc.exists&&Array.isArray(doc.data()?.items)?doc.data().items:[];
+    const snap=await firebaseDb.collection('board').doc('postingQueue').collection('items')
+      .orderBy('createdAt','desc')
+      .limit(100)
+      .get();
+    postingQueue=snap.docs.map(doc=>({id:doc.id,...doc.data()}));
+    if(!postingQueue.length){
+      const legacyDoc=await firebaseDb.collection('board').doc('postingQueue').get();
+      postingQueue=legacyDoc.exists&&Array.isArray(legacyDoc.data()?.items)?legacyDoc.data().items:[];
+    }
   }catch(e){
     postingQueue=[];
     showToast('Could not load posting queue: '+e.message,'error');
   }
 }
 
-async function savePostingQueue(){
+async function savePostingJob(job){
   initFirebaseBackend();
-  await firebaseDb.collection('board').doc('postingQueue').set({
-    items:postingQueue,
+  await firebaseDb.collection('board').doc('postingQueue').collection('items').doc(job.id).set({
+    ...job,
     updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-    updatedBy:currentSession?.userId||null
+    createdBy:currentSession?.userId||null
   },{merge:false});
 }
 
@@ -2090,7 +2136,7 @@ async function confirmPostingCompose(){
   postingQueue.push(postingJob);
   btn.disabled=true;btn.textContent='Saving job...';
   try{
-    await savePostingQueue();
+    await savePostingJob(postingJob);
   }catch(e){
     postingQueue=postingQueue.filter(item=>item.id!==postingJob.id);
     errEl.textContent='Could not save posting job: '+e.message;
@@ -2201,19 +2247,30 @@ document.getElementById('saveBtn').addEventListener('click',async()=>{
   applyStageAudit(card,existingCard);
   const btn=document.getElementById('saveBtn');
   // If an upload is still in-flight, wait for it to finish first
-  if(activeUploadPromise){
+  if(activeUploadPromises.size){
     btn.textContent='Waiting for upload...';btn.disabled=true;
-    await activeUploadPromise;
+    await waitForActiveUploads();
     // Modal may have been closed or switched while we waited
     if(!document.getElementById('modalBg').classList.contains('open'))return;
     btn.textContent='Save';btn.disabled=false;
     assignFileState(card); // re-read file state now that upload is done
   }
   btn.textContent='Saving...';btn.disabled=true;
+  const previousCards=JSON.parse(JSON.stringify(cards));
   try{
-    if(editId){const idx=cards.findIndex(c=>c.id===editId);cards[idx]=card;}else{cards.push(card);}
-    await saveData();closeModal();renderAll();showToast(boardMode==='carousels'?'Carousel saved':'Video saved','success');
-  }catch(e){showToast('Save failed: '+e.message,'error');}
+    if(editId){
+      const idx=cards.findIndex(c=>c.id===editId);
+      if(idx<0)throw new Error('This card no longer exists. Refresh the board and retry.');
+      cards[idx]=card;
+    }else{cards.push(card);}
+    await saveData();
+    await finalizeSavedModalFiles().catch(()=>{});
+    closeModal({saved:true});renderAll();showToast(boardMode==='carousels'?'Carousel saved':'Video saved','success');
+  }catch(e){
+    cards=previousCards;
+    renderAll();
+    showToast('Save failed: '+e.message,'error');
+  }
   btn.textContent='Save';btn.disabled=false;
 });
 
@@ -2221,10 +2278,34 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
   if(!editId)return;
   const cardToDelete=cards.find(c=>c.id===editId);if(!cardToDelete)return;
   const originalIndex=cards.indexOf(cardToDelete);
-  if(pendingDelete){clearTimeout(pendingDelete.timer);pendingDelete=null;try{await saveData();}catch(e){}}
+  if(pendingDelete){
+    const previousDelete=pendingDelete;
+    clearTimeout(previousDelete.timer);
+    pendingDelete=null;
+    try{
+      await saveData();
+      await deleteStorageItems(cardFileItemIds(previousDelete.card));
+    }catch(e){
+      cards.splice(Math.min(previousDelete.index,cards.length),0,previousDelete.card);
+      renderAll();
+      showToast('Delete failed: '+e.message,'error');
+      return;
+    }
+  }
   cards=cards.filter(c=>c.id!==editId);
   closeModal();renderAll();
-  pendingDelete={card:cardToDelete,index:originalIndex,timer:setTimeout(async()=>{pendingDelete=null;try{await saveData();}catch(e){showToast('Delete failed: '+e.message,'error');}finally{flushPendingSnapshot();}},5000)};
+  pendingDelete={card:cardToDelete,index:originalIndex,timer:setTimeout(async()=>{
+    pendingDelete=null;
+    try{
+      await saveData();
+      await deleteStorageItems(cardFileItemIds(cardToDelete));
+    }catch(e){
+      cards.splice(Math.min(originalIndex,cards.length),0,cardToDelete);
+      renderAll();
+      showToast('Delete failed: '+e.message,'error');
+    }
+    finally{flushPendingSnapshot();}
+  },5000)};
   showToastUndo('"'+cardToDelete.name+'" deleted');
 });
 
@@ -2322,7 +2403,7 @@ document.addEventListener('keydown',function(e){
 });
 
 window.addEventListener('beforeunload',e=>{
-  if(activeUploadPromise){e.preventDefault();e.returnValue='';}
+  if(activeUploadPromises.size){e.preventDefault();e.returnValue='';}
 });
 
 init().catch(e=>console.error(e));

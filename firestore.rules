@@ -38,6 +38,10 @@ service cloud.firestore {
       allow write: if activeUser() && docId in ["videos", "carousels"];
 
       allow read, write: if adminUser() && docId in ["socialAccounts", "postingQueue"];
+
+      match /items/{jobId} {
+        allow read, write: if adminUser() && docId == "postingQueue";
+      }
     }
   }
 }
