@@ -1796,25 +1796,31 @@ function openLightbox(type,url,name){
 function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.getElementById('lightboxContent').innerHTML='';}
 
 // ========== UNDO DELETE ==========
-function showToastUndo(msg){
+// onUndo: optional async callback invoked when the user clicks Undo.
+// If omitted, falls back to the old pendingDelete-based soft-undo.
+function showToastUndo(msg,onUndo){
   const t=document.getElementById('toast');t.innerHTML='';
   const span=document.createElement('span');span.textContent=msg;
   const btn=document.createElement('button');btn.textContent='Undo';
   btn.style.cssText='margin-left:12px;background:none;border:1px solid currentColor;border-radius:4px;padding:2px 8px;font-size:12px;color:inherit;cursor:pointer;font-family:inherit';
+  let used=false;
   btn.addEventListener('click',async()=>{
-    if(pendingDelete){
+    if(used)return;used=true;
+    t.classList.remove('show');
+    if(onUndo){
+      await onUndo();
+    }else if(pendingDelete){
       clearTimeout(pendingDelete.timer);
       cards.splice(pendingDelete.index,0,pendingDelete.card);
       pendingDelete=null;
       renderAll();
-      t.classList.remove('show');
       try{await saveData();}catch(e){showToast('Undo save failed: '+e.message,'error');}finally{flushPendingSnapshot();}
     }
   });
   const bar=document.createElement('div');bar.className='toast-bar';
   t.appendChild(span);t.appendChild(btn);t.appendChild(bar);
   t.className='toast show';
-  setTimeout(()=>{if(!pendingDelete)t.classList.remove('show');},5000);
+  setTimeout(()=>t.classList.remove('show'),5000);
 }
 
 // ========== REPORTS ==========
@@ -2823,47 +2829,37 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
   if(!editId)return;
   const cardToDelete=cards.find(c=>c.id===editId);if(!cardToDelete)return;
   const originalIndex=cards.indexOf(cardToDelete);
-  if(pendingDelete){
-    const previousDelete=pendingDelete;
-    clearTimeout(previousDelete.timer);
-    pendingDelete=null;
-    try{
-      await saveData();
-      await deleteStorageItems(cardFileItemIds(previousDelete.card));
-    }catch(e){
-      cards.splice(Math.min(previousDelete.index,cards.length),0,previousDelete.card);
-      renderAll();
-      showToast('Delete failed: '+e.message,'error');
-      return;
-    }
-  }
+
+  // Remove the card locally and commit the delete to Firestore immediately.
+  // The old approach (5-second delayed save) caused a race: any Firestore
+  // snapshot that arrived during the wait window still contained the deleted
+  // card, and flushing it after the timer cleared pendingDelete brought the
+  // card back. Saving immediately eliminates that window entirely.
   cards=cards.filter(c=>c.id!==editId);
-  closeModal();renderAll();
-  pendingDelete={card:cardToDelete,index:originalIndex,timer:setTimeout(async()=>{
-    // Keep pendingDelete set (non-null) until saveData() resolves so that
-    // boardUiBusy() stays true throughout the async write. If we cleared it
-    // first, any Firestore snapshot that arrived during the save would see
-    // boardUiBusy()===false, apply the old remote state (card still present),
-    // and bring the card back before the delete even reached Firestore.
-    try{
-      await saveData();
-      // Invalidate any snapshot callback that was already in flight (i.e.
-      // awaiting migrateLegacyCardsIfNeeded) when the delete timer fired.
-      // Those callbacks captured a latestCards that still includes the deleted
-      // card. Incrementing boardSnapshotSeq causes them to bail out before
-      // calling applyLatest(), so they can't overwrite the correct local state.
-      // Also clear any queued pendingSnapshotPayload for the same reason.
-      boardSnapshotSeq++;
-      pendingSnapshotPayload=null;
-      await deleteStorageItems(cardFileItemIds(cardToDelete));
-    }catch(e){
-      cards.splice(Math.min(originalIndex,cards.length),0,cardToDelete);
-      renderAll();
-      showToast('Delete failed: '+e.message,'error');
-    }
-    finally{pendingDelete=null;flushPendingSnapshot();}
-  },5000)};
-  showToastUndo('"'+cardToDelete.name+'" deleted');
+  closeModal();
+  renderAll();
+
+  try{
+    await saveData();
+  }catch(e){
+    // Rollback the local removal if the write failed.
+    cards.splice(Math.min(originalIndex,cards.length),0,cardToDelete);
+    renderAll();
+    showToast('Delete failed: '+e.message,'error');
+    return;
+  }
+
+  // Delete committed. Fire-and-forget the storage cleanup.
+  deleteStorageItems(cardFileItemIds(cardToDelete)).catch(()=>{});
+
+  // Offer Undo for 5 seconds. Undo re-creates the card in Firestore (the
+  // card's id is no longer in cardBaselineData after the delete, so saveData
+  // treats it as a new card and writes it back with tx.set).
+  showToastUndo('"'+cardToDelete.name+'" deleted',async()=>{
+    cards.splice(Math.min(originalIndex,cards.length),0,cardToDelete);
+    renderAll();
+    try{await saveData();}catch(e){showToast('Undo failed: '+e.message,'error');}
+  });
 });
 
 document.getElementById('closeModalBtn').addEventListener('click',closeModal);
