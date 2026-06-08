@@ -47,6 +47,7 @@ let boardSettings = null;
 let settingsDraft = null;
 let dragCardId = null;
 let pendingDelete = null;
+let boardSnapshotSeq = 0; // incremented after a committed delete to discard in-flight stale snapshot callbacks
 let expandedStages = new Set();
 let activeFilters = {q:'',format:'',stage:'',category:'',priority:'',compliance:'',presenter:'',assign:'',editor:'',postDateFrom:'',postDateTo:'',dueDateFrom:'',dueDateTo:'',channel:'',segment:'',hasThumb:false,hasVid:false,overdue:false,dueSoon:false};
 let sortBy = 'priority';
@@ -498,14 +499,21 @@ function subscribeFirebaseBoard(mode=boardMode){
         if(first){first=false;reject(err);}
     };
     const metaUnsub=firebaseBoardRef(mode).onSnapshot(async doc=>{
+      // Capture seq immediately so we can detect if a delete committed while
+      // we were awaiting async work below and discard this stale callback.
+      const mySeq=boardSnapshotSeq;
       try{
         latestMeta=doc.exists?doc.data():{};
         lastFromCache=doc.metadata?.fromCache;
         if(latestCards&&await migrateLegacyCardsIfNeeded(mode,latestMeta,latestCards))return;
+        if(boardSnapshotSeq!==mySeq)return;
         applyLatest();
       }catch(e){fail(e);}
     },fail);
     const cardsUnsub=firebaseCardsRef(mode).onSnapshot(async snap=>{
+      // Same: capture seq at fire time, bail before applyLatest() if a
+      // delete committed while the async migration check was in flight.
+      const mySeq=boardSnapshotSeq;
       try{
         latestCards=cardsFromSnapshot(snap);
         lastFromCache=snap.metadata?.fromCache;
@@ -516,6 +524,7 @@ function subscribeFirebaseBoard(mode=boardMode){
         }else if(await migrateLegacyCardsIfNeeded(mode,latestMeta,latestCards)){
           return;
         }
+        if(boardSnapshotSeq!==mySeq)return;
         applyLatest();
         if(first){first=false;resolve(true);}
       }catch(e){fail(e);}
@@ -2838,13 +2847,13 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
     // and bring the card back before the delete even reached Firestore.
     try{
       await saveData();
-      // Discard any snapshot that arrived during the 5-second undo window.
-      // Those snapshots were captured BEFORE the delete reached Firestore, so
-      // they still include the deleted card. Flushing one of them now would
-      // bring the card back. Clearing it here is safe: saveData() already
-      // wrote the correct state to Firestore, setCardBaselines() updated the
-      // local baselines, and the Firestore listener will fire a fresh post-
-      // commit snapshot shortly (which won't include the deleted card).
+      // Invalidate any snapshot callback that was already in flight (i.e.
+      // awaiting migrateLegacyCardsIfNeeded) when the delete timer fired.
+      // Those callbacks captured a latestCards that still includes the deleted
+      // card. Incrementing boardSnapshotSeq causes them to bail out before
+      // calling applyLatest(), so they can't overwrite the correct local state.
+      // Also clear any queued pendingSnapshotPayload for the same reason.
+      boardSnapshotSeq++;
       pendingSnapshotPayload=null;
       await deleteStorageItems(cardFileItemIds(cardToDelete));
     }catch(e){
