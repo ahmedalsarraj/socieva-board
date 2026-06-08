@@ -1617,20 +1617,26 @@ async function downloadUpload(type){
     }catch(e){}
   }
   if(!url){showToast('No file to download','error');return;}
-  // Plain browser navigation (not fetch()+blob) so ad-blockers/VPNs/privacy
-  // extensions that block fetch() to googleapis.com ("Failed to fetch") can't
-  // get in the way — and now that the file's Content-Disposition is set to
-  // "attachment", this navigation triggers an immediate save-to-disk download
-  // rather than opening the file in the tab.
-  const win=window.open(url,'_blank');
-  if(win){
-    setPlainStatus(statusEl,'Download started — check your browser\'s downloads.');
-    showToast('Download started','success');
-  }else{
-    setPlainStatus(statusEl,'Pop-up blocked — download the file directly:');
-    statusEl.innerHTML+=` <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:#3b82f6">Download file →</a>`;
-    showToast('Allow pop-ups to download','error');
-  }
+  // Use an <a download> click rather than window.open():
+  //   - window.open(video_url) → browser sees a video MIME type, fires up its
+  //     media player, and ignores Content-Disposition: attachment entirely.
+  //   - <a download> routes straight to the browser's download mechanism and
+  //     bypasses the media-player decision, so videos (and everything else)
+  //     save to disk instead of playing inline.
+  // No fetch()/blob involved — just a link click — so ad-blockers/VPNs that
+  // block fetch() to googleapis.com can't interfere.
+  const cleanName=itemId
+    ?String(itemId).split('/').pop().replace(/^\d+_[a-z0-9]+_/i,'')||'file'
+    :'file';
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=cleanName;
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setPlainStatus(statusEl,'Download started — check your browser\'s downloads.');
+  showToast('Download started','success');
 }
 
 async function removeUpload(type){
