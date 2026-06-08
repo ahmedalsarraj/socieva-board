@@ -2849,18 +2849,17 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
     return;
   }
 
-  // Delete committed. Fire-and-forget the storage cleanup.
-  deleteStorageItems(cardFileItemIds(cardToDelete)).catch(()=>{});
+  // Delay Storage file deletion until after the 5-second undo window.
+  // If we deleted files immediately and the user clicked Undo, the card
+  // would come back in Firestore but its thumbnail/video would be gone.
+  // Cancelling the timer on Undo preserves the files.
+  const storageCleanupTimer=setTimeout(()=>{
+    deleteStorageItems(cardFileItemIds(cardToDelete)).catch(()=>{});
+  },5500); // 500ms grace past the toast window
 
-  // Offer Undo for 5 seconds. Undo re-creates the card in Firestore (the
-  // card's id is no longer in cardBaselineData after the delete, so saveData
-  // treats it as a new card and writes it back with tx.set).
-  // Guard against board-mode switch during the undo window: if the user
-  // flipped to the other board (videos ↔ carousels) before clicking Undo,
-  // the card belongs to a different collection and we must not splice it
-  // into the wrong cards array.
   const modeAtDelete=boardMode;
   showToastUndo('"'+cardToDelete.name+'" deleted',async()=>{
+    clearTimeout(storageCleanupTimer); // files survive — card is being restored
     if(boardMode!==modeAtDelete){showToast('Cannot undo — board mode changed','error');return;}
     cards.splice(Math.min(originalIndex,cards.length),0,cardToDelete);
     renderAll();
