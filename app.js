@@ -1839,6 +1839,7 @@ let platformReportLoading = false;
 let platformReportData = null;
 let platformTopContentLoading = false;
 let platformTopContentMode = null;
+let platformTopContentError = '';
 
 function numFmt(n){
   if(n==null||Number.isNaN(Number(n)))return'—';
@@ -2006,7 +2007,9 @@ function renderMetricCard(icon,label,value){
 function renderPlatformInsightBars(totals){
   const items=[
     ['Views',totals.views],
+    ['Impressions',totals.impressions],
     ['Reach',totals.reach],
+    ['Frequency',totals.frequency],
     ['Engagement',totals.totalInteractions],
     ['Likes',totals.likes],
     ['Comments',totals.comments],
@@ -2052,6 +2055,9 @@ function renderPlatformReport(){
   const totals=platformReportData.totals||{};
   const rows=Array.isArray(platformReportData.rows)?platformReportData.rows:[];
   const topMode=platformReportData.contentType||platformTopContentMode||'all';
+  const impressionsNote=totals.impressionsSource==='calculated_from_views_reach'
+    ? 'Impressions are calculated from Views and Reach because Meta no longer returns Instagram impressions for this endpoint.'
+    : (totals.impressionsSource==='meta_insights'?'Impressions source: Meta insights.':'Impressions are unavailable for this selection.');
   document.getElementById('reportsBody').innerHTML=`
     <div class="report-period-note">
       <span style="color:var(--text2);font-weight:500">${escHtml(account.label)}</span>
@@ -2065,6 +2071,7 @@ function renderPlatformReport(){
         ${renderMetricCard('Views','Views',totals.views)}
         ${renderMetricCard('Impressions','Impressions',totals.impressions)}
         ${renderMetricCard('Reach','Reach',totals.reach)}
+        ${renderMetricCard('Frequency','Frequency',totals.frequency!=null?Number(totals.frequency).toFixed(2):null)}
         ${renderMetricCard('Engagement','Engagement',totals.totalInteractions)}
         ${renderMetricCard('Likes','Likes',totals.likes)}
         ${renderMetricCard('Comments','Comments',totals.comments)}
@@ -2074,6 +2081,7 @@ function renderPlatformReport(){
       </div>
       <div class="platform-chart-card">
         <div class="widget-title">Performance distribution</div>
+        <div class="report-period-note" style="margin-bottom:10px">${escHtml(impressionsNote)}</div>
         ${renderPlatformInsightBars(totals)}
       </div>
     </div>
@@ -2082,11 +2090,12 @@ function renderPlatformReport(){
     <div class="top-content-toolbar">
       <span class="report-period-note" style="margin-bottom:0">Optional content-level ranking. Overview totals above do not depend on this table.</span>
       <div class="top-content-actions">
-        <button class="btn top-content-btn ${topMode==='all'&&rows.length?'active':''}" data-content-type="all">${platformTopContentLoading&&platformTopContentMode==='all'?'Loading...':'Show top 10 all content'}</button>
-        <button class="btn top-content-btn ${topMode==='reels'&&rows.length?'active':''}" data-content-type="reels">${platformTopContentLoading&&platformTopContentMode==='reels'?'Loading...':'Reels'}</button>
-        <button class="btn top-content-btn ${topMode==='posts'&&rows.length?'active':''}" data-content-type="posts">${platformTopContentLoading&&platformTopContentMode==='posts'?'Loading...':'Posts'}</button>
+        <button class="btn top-content-btn ${topMode==='all'&&rows.length?'active':''}" data-content-type="all" ${platformTopContentLoading?'disabled':''}>${platformTopContentLoading&&platformTopContentMode==='all'?'Loading...':'Show top 10 all content'}</button>
+        <button class="btn top-content-btn ${topMode==='reels'&&rows.length?'active':''}" data-content-type="reels" ${platformTopContentLoading?'disabled':''}>${platformTopContentLoading&&platformTopContentMode==='reels'?'Loading...':'Reels'}</button>
+        <button class="btn top-content-btn ${topMode==='posts'&&rows.length?'active':''}" data-content-type="posts" ${platformTopContentLoading?'disabled':''}>${platformTopContentLoading&&platformTopContentMode==='posts'?'Loading...':'Posts'}</button>
       </div>
     </div>
+    ${platformTopContentError?`<div class="platform-report-empty" style="color:#f87171">${escHtml(platformTopContentError)}</div>`:''}
     ${platformTopContentLoading?'<div class="platform-report-empty">Loading top content...</div>':(platformReportData.topContentLoaded&&rows.length?`<div class="report-table-wrap">
       <table class="report-table">
         <thead><tr>
@@ -2130,6 +2139,7 @@ async function loadPlatformReport(){
     const fn=firebaseFunctions.httpsCallable('getPlatformReport');
     const res=await fn({accountId:platformReportAccountId,from,to,includeTopContent:false});
     platformReportData=res.data||{ok:false,reason:'No report data returned.'};
+    platformTopContentError='';
   }catch(e){
     platformReportData={ok:false,reason:e?.message||String(e)};
   }finally{
@@ -2143,6 +2153,7 @@ async function loadPlatformTopContent(contentType='all'){
   const {from,to}=getReportRange();
   platformTopContentLoading=true;
   platformTopContentMode=contentType;
+  platformTopContentError='';
   renderPlatformReport();
   try{
     const fn=firebaseFunctions.httpsCallable('getPlatformReport');
@@ -2155,7 +2166,8 @@ async function loadPlatformTopContent(contentType='all'){
       overviewSource:platformReportData.overviewSource
     };
   }catch(e){
-    showToast('Top content load failed: '+(e?.message||String(e)),'error');
+    platformTopContentError='Top content load failed: '+(e?.message||String(e));
+    showToast(platformTopContentError,'error');
   }finally{
     platformTopContentLoading=false;
     renderPlatformReport();

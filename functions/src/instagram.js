@@ -175,12 +175,64 @@ function sumMetricValues(insights, name) {
   return item.values.reduce((sum, entry) => sum + Number(entry.value || 0), 0);
 }
 
+function metricNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function calculatedImpressions({views, impressions, reach}) {
+  const direct = metricNumber(impressions, 0);
+  if (direct > 0) {
+    return {
+      impressions: direct,
+      impressionsSource: 'meta_insights',
+      frequency: metricNumber(reach, 0) > 0 ? direct / metricNumber(reach, 0) : null
+    };
+  }
+
+  const viewCount = metricNumber(views, 0);
+  const reachCount = metricNumber(reach, 0);
+  if (viewCount <= 0) {
+    return {
+      impressions: 0,
+      impressionsSource: 'unavailable',
+      frequency: null
+    };
+  }
+
+  // Meta deprecated Instagram impressions in many API surfaces and replaced
+  // them with Views. The standard media relationship is:
+  //   frequency = impressions / reach
+  //   impressions = reach * frequency
+  // When only views + reach are available, use views as the closest total
+  // exposure proxy and expose the derived frequency for transparency.
+  const frequency = reachCount > 0 ? viewCount / reachCount : null;
+  return {
+    impressions: reachCount > 0 ? Math.round(reachCount * frequency) : viewCount,
+    impressionsSource: 'calculated_from_views_reach',
+    frequency
+  };
+}
+
 function mergeMetricData(target, source) {
   for (const item of source?.data || []) {
     const existingIndex = target.data.findIndex(existing => existing.name === item.name);
     if (existingIndex === -1) target.data.push(item);
     else target.data[existingIndex] = item;
   }
+}
+
+async function mapLimit(items, limit, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({length: Math.min(limit, items.length)}, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function inDateRange(timestamp, from, to) {
@@ -194,8 +246,8 @@ function inDateRange(timestamp, from, to) {
 async function getMediaInsights(mediaId, accessToken) {
   const metricSets = [
     'views,reach,total_interactions,likes,comments,shares,saved',
-    'reach,total_interactions,likes,comments,shares,saved',
-    'reach,total_interactions',
+    'views,reach,total_interactions',
+    'likes,comments,shares,saved',
     'impressions,reach,engagement,saved'
   ];
   let combined = {data: []};
@@ -270,16 +322,24 @@ async function getAccountInsights({igUserId, accessToken, from, to}) {
     return sumMetricValues(combined, name);
   };
 
+  const totals = {
+    views: metric('views'),
+    impressions: metric('impressions'),
+    likes: metric('likes'),
+    comments: metric('comments'),
+    saves: metric('saves') ?? metric('saved'),
+    shares: metric('shares'),
+    reach: metric('reach'),
+    totalInteractions: metric('total_interactions') ?? metric('accounts_engaged')
+  };
+  const impressionCalc = calculatedImpressions(totals);
+
   return {
     totals: {
-      views: metric('views'),
-      impressions: metric('impressions'),
-      likes: metric('likes'),
-      comments: metric('comments'),
-      saves: metric('saves') ?? metric('saved'),
-      shares: metric('shares'),
-      reach: metric('reach'),
-      totalInteractions: metric('total_interactions') ?? metric('accounts_engaged')
+      ...totals,
+      impressions: impressionCalc.impressions,
+      impressionsSource: impressionCalc.impressionsSource,
+      frequency: impressionCalc.frequency
     },
     unavailable,
     rawMetricNames: combined.data.map(item => item.name)
@@ -330,8 +390,10 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
   const rows = [];
   const accountInsights = await getAccountInsights({igUserId, accessToken, from, to});
 
-  const topCandidates = includeTopContent ? media.filter(item => mediaMatchesContentType(item, contentType)) : [];
-  for (const item of topCandidates) {
+  const topCandidates = includeTopContent
+    ? media.filter(item => mediaMatchesContentType(item, contentType)).slice(0, 60)
+    : [];
+  const rowResults = await mapLimit(topCandidates, 6, async item => {
     let insights = null;
     let error = null;
     try {
@@ -345,11 +407,12 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
     const shares = metricValue(insights, 'shares') ?? 0;
     const saves = metricValue(insights, 'saved') ?? metricValue(insights, 'saves') ?? 0;
     const views = metricValue(insights, 'views') ?? metricValue(insights, 'video_views') ?? 0;
-    const impressions = metricValue(insights, 'impressions');
+    const directImpressions = metricValue(insights, 'impressions');
     const reach = metricValue(insights, 'reach');
+    const impressionCalc = calculatedImpressions({views, impressions: directImpressions, reach});
     const totalInteractions = metricValue(insights, 'total_interactions') ?? metricValue(insights, 'engagement') ?? (likes + comments + shares + saves);
 
-    rows.push({
+    return {
       id: item.id,
       title: item.caption ? String(item.caption).slice(0, 120) : 'Untitled',
       mediaType: item.media_product_type || item.media_type || '',
@@ -357,7 +420,9 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
       permalink: item.permalink || '',
       thumbnailUrl: item.thumbnail_url || item.media_url || '',
       views,
-      impressions,
+      impressions: impressionCalc.impressions,
+      impressionsSource: impressionCalc.impressionsSource,
+      frequency: impressionCalc.frequency,
       reach,
       likes,
       comments,
@@ -365,8 +430,9 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
       shares,
       totalInteractions,
       error
-    });
-  }
+    };
+  });
+  rows.push(...rowResults.filter(Boolean));
 
   rows.sort((a, b) => (b.views || b.totalInteractions || 0) - (a.views || a.totalInteractions || 0));
   return {
