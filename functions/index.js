@@ -54,7 +54,7 @@ const {logger} = require('firebase-functions');
 const {defineSecret} = require('firebase-functions/params');
 const admin = require('firebase-admin');
 
-const {publishToInstagram} = require('./src/instagram');
+const {publishToInstagram, testInstagramInsights} = require('./src/instagram');
 const {publishToYoutube} = require('./src/youtube');
 const {publishToTiktok} = require('./src/tiktok');
 
@@ -94,6 +94,15 @@ const PUBLISHERS = {
   youtube: publishToYoutube,
   tiktok: publishToTiktok
 };
+
+async function assertAdmin(request) {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
+  const userDoc = await db.collection('users').doc(request.auth.uid).get();
+  const user = userDoc.data();
+  if (!userDoc.exists || user?.role !== 'admin' || user?.active !== true) {
+    throw new HttpsError('permission-denied', 'This action is restricted to admins.');
+  }
+}
 
 /**
  * Decide whether a queue entry is ready to go out right now.
@@ -293,12 +302,31 @@ exports.processPostingQueue = onSchedule(
 exports.processPostingQueueNow = onCall(
   {secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1'},
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
-    const userDoc = await db.collection('users').doc(request.auth.uid).get();
-    const user = userDoc.data();
-    if (!userDoc.exists || user?.role !== 'admin' || user?.active !== true) {
-      throw new HttpsError('permission-denied', 'Posting is restricted to admins.');
-    }
+    await assertAdmin(request);
     return sweepQueue({instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value()});
+  }
+);
+
+exports.testInstagramInsights = onCall(
+  {secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1'},
+  async (request) => {
+    await assertAdmin(request);
+    const accountId = String(request.data?.accountId || '').trim();
+    if (!accountId) throw new HttpsError('invalid-argument', 'accountId is required.');
+    if (ACCOUNT_PLATFORM[accountId] !== 'instagram') {
+      throw new HttpsError('invalid-argument', 'Insights test is only available for Instagram accounts.');
+    }
+    const accountsSnap = await ACCOUNTS_DOC.get();
+    const accountsMeta = accountsSnap.exists ? (accountsSnap.data() || {}) : {};
+    const accountMeta = accountsMeta[accountId] || {};
+    try {
+      return await testInstagramInsights({
+        accountId,
+        accountMeta,
+        secrets: {instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value()}
+      });
+    } catch (e) {
+      throw new HttpsError('failed-precondition', e.message || String(e));
+    }
   }
 );

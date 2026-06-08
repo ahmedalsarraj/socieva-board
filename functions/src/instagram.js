@@ -155,6 +155,51 @@ async function publishContainer({igUserId, containerId, accessToken}) {
   return res.id;
 }
 
+async function testInstagramInsights({accountId, accountMeta, secrets}) {
+  const igUserId = accountMeta.igUserId;
+  if (!igUserId) throw new Error(`No Instagram Business Account ID saved for "${accountId}"`);
+  if (!secrets.instagramAccessToken) throw new Error('INSTAGRAM_ACCESS_TOKEN secret is not configured');
+
+  const accessToken = resolveAccessToken(secrets.instagramAccessToken, igUserId);
+  if (!accessToken) {
+    throw new Error(`No usable access token found for "${accountId}" (igUserId ${igUserId}).`);
+  }
+
+  const media = await igRequest(`${igUserId}/media`, {
+    params: {fields: 'id,media_type,media_product_type,timestamp,permalink', limit: 1},
+    accessToken
+  });
+  const item = Array.isArray(media.data) ? media.data[0] : null;
+  if (!item?.id) {
+    return {ok: false, accountId, igUserId, reason: 'No media found on this Instagram account.'};
+  }
+
+  const metricSets = [
+    'reach,total_interactions',
+    'reach',
+    'likes,comments,shares,saved'
+  ];
+  let lastError = null;
+  for (const metric of metricSets) {
+    try {
+      const insights = await igRequest(`${item.id}/insights`, {params: {metric}, accessToken});
+      return {
+        ok: true,
+        accountId,
+        igUserId,
+        mediaId: item.id,
+        mediaType: item.media_type || item.media_product_type || null,
+        metrics: Array.isArray(insights.data) ? insights.data.map(m => m.name) : [],
+        sample: insights.data || []
+      };
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  throw new Error(lastError?.message || 'Insights test failed.');
+}
+
 /**
  * Entry point called by index.js's runJob() for any destination whose
  * platform is 'instagram'.
@@ -203,4 +248,4 @@ async function publishToInstagram({job, accountId, accountMeta, secrets}) {
   return publishContainer({igUserId, containerId, accessToken});
 }
 
-module.exports = {publishToInstagram};
+module.exports = {publishToInstagram, testInstagramInsights};

@@ -63,6 +63,7 @@ let firebaseApp = null;
 let firebaseAuth = null;
 let firebaseDb = null;
 let firebaseStorage = null;
+let firebaseFunctions = null;
 let firebasePersistenceRequested = false;
 let boardSnapshotUnsub = null;
 let boardSnapshotMode = null;
@@ -123,6 +124,7 @@ function initFirebaseBackend(){
   firebaseAuth=firebase.auth();
   firebaseDb=firebase.firestore();
   firebaseStorage=firebase.storage();
+  firebaseFunctions=typeof firebase.functions === 'function' ? firebase.app().functions('us-central1') : null;
   if(!firebasePersistenceRequested){
     firebasePersistenceRequested=true;
     firebaseDb.enablePersistence?.({synchronizeTabs:true}).catch(()=>{});
@@ -2067,14 +2069,49 @@ function renderPostingAccountsBar(){
   document.getElementById('postingAccountsBar').innerHTML=POSTING_ACCOUNTS.map(a=>{
     const connected=postingAccountConnected(a);
     const manageable=POSTING_SHOW_CONNECT_UI&&a.platform==='instagram'&&canManageSettings();
+    const testable=connected&&a.platform==='instagram'&&canManageSettings();
     return`<span class="posting-account-chip ${connected?'connected':'disconnected'}" title="${escHtml(a.handle)}${connected?'':' — not connected'}">
       <span class="dot"></span>${escHtml(a.label)}
       ${manageable?`<button type="button" class="posting-account-manage" data-id="${escHtml(a.id)}">${connected?'Manage':'Connect'}</button>`:''}
+      ${testable?`<button type="button" class="posting-account-test" data-id="${escHtml(a.id)}">Test insights</button>`:''}
     </span>`;
   }).join('');
   document.querySelectorAll('#postingAccountsBar .posting-account-manage').forEach(btn=>{
     btn.addEventListener('click',e=>{e.stopPropagation();openConnectInstagram(btn.dataset.id);});
   });
+  document.querySelectorAll('#postingAccountsBar .posting-account-test').forEach(btn=>{
+    btn.addEventListener('click',e=>{e.stopPropagation();testPostingInsights(btn.dataset.id,btn);});
+  });
+}
+
+async function testPostingInsights(accountId,btn){
+  const account=POSTING_ACCOUNTS.find(a=>a.id===accountId);
+  if(!account)return;
+  if(!firebaseFunctions){
+    showToast('Firebase Functions SDK is not loaded. Refresh and retry.','error');
+    return;
+  }
+  const original=btn.textContent;
+  btn.disabled=true;
+  btn.textContent='Testing...';
+  try{
+    const fn=firebaseFunctions.httpsCallable('testInstagramInsights');
+    const res=await fn({accountId});
+    const data=res.data||{};
+    if(data.ok){
+      const metrics=Array.isArray(data.metrics)&&data.metrics.length?data.metrics.join(', '):'insights';
+      showToast(`${account.label}: Insights OK (${metrics})`,'success');
+      btn.textContent='OK';
+      setTimeout(()=>{btn.textContent=original;btn.disabled=false;},1800);
+      return;
+    }
+    showToast(`${account.label}: ${data.reason||'Insights test did not return data.'}`,'error');
+  }catch(e){
+    const msg=e?.message||String(e);
+    showToast(`${account.label}: ${msg}`,'error');
+  }
+  btn.textContent=original;
+  btn.disabled=false;
 }
 
 function renderPostingReadyGrid(){
