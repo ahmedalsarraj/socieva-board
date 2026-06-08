@@ -781,12 +781,6 @@ function setPlainStatus(el,msg,type=''){
   el.textContent=msg;
 }
 
-function setActionButtonsDisabled(containerId,disabled){
-  const container=document.getElementById(containerId);
-  if(!container)return;
-  container.querySelectorAll('button').forEach(btn=>{btn.disabled=disabled;});
-}
-
 async function fetchBlobWithProgress(url,onProgress){
   const res=await fetch(url);
   if(!res.ok)throw new Error(`Download failed: ${res.status}`);
@@ -1595,13 +1589,10 @@ async function handleUpload(file,type){
 }
 
 async function downloadUpload(type){
-  const gen=transferGen;
   const statusEl=document.getElementById(type+'Status');
   const itemId = type==='thumb' ? thumbItemId : vidItemId;
   const cachedUrl = type==='thumb' ? thumbDisplayUrl : vidDisplayUrl;
   if(!itemId && !cachedUrl){showToast('No file to download','error');return;}
-  const name = document.getElementById('fName').value || 'file';
-  const ext = type==='thumb' ? '.jpg' : '.mp4';
   // Always fetch a fresh pre-auth URL — cached ones expire after ~1 hour
   let url = cachedUrl;
   if(itemId){
@@ -1611,61 +1602,18 @@ async function downloadUpload(type){
     }catch(e){}
   }
   if(!url){showToast('No file to download','error');return;}
-  setActionButtonsDisabled(type+'Actions',true);
-  setTransferStatus(statusEl,'Downloading',0);
-  try{
-    let blob;
-    try{
-      blob=await fetchBlobWithProgress(url,pct=>{
-        if(transferGen!==gen)return;
-        setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
-      });
-    }catch(e){
-      if(transferGen!==gen)throw e;
-      // "Failed to fetch" can mean a dropped connection (worth one retry with
-      // a fresh URL) or a fetch() blocked outright by an ad-blocker / VPN /
-      // privacy extension on the googleapis.com domain (no amount of
-      // retrying helps that — only a direct browser navigation does, since
-      // navigation isn't subject to the same blocking as fetch()).
-      if(!/failed to fetch/i.test(e.message||''))throw e;
-      try{
-        if(itemId){
-          setTransferStatus(statusEl,'Retrying…',0);
-          url=await firebaseRefreshDownloadUrl(itemId);
-          if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
-        }
-        blob=await fetchBlobWithProgress(url,pct=>{
-          if(transferGen!==gen)return;
-          setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
-        });
-      }catch(e2){
-        if(transferGen!==gen)throw e2;
-        const win=window.open(url,'_blank');
-        if(win){
-          setPlainStatus(statusEl,'Opened the file in a new tab — use your browser\'s save/download option there.');
-          showToast('Opened in a new tab — save it from there','success');
-        }else{
-          setPlainStatus(statusEl,'Download blocked — likely an ad-blocker or VPN on this network. Try a different network/browser, or open the link directly:','error');
-          statusEl.innerHTML+=` <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:#3b82f6">Open file →</a>`;
-          showToast('Download blocked on this network','error');
-        }
-        return;
-      }
-    }
-    if(transferGen!==gen)return;
-    triggerBlobDownload(blob,name+'-'+(type==='thumb'?'thumbnail':'video')+ext);
-    setPlainStatus(statusEl,'Download started ✓');
-    showToast('Download started','success');
-    setTimeout(()=>{
-      if(transferGen===gen&&statusEl.textContent==='Download started ✓')setPlainStatus(statusEl,'Uploaded ✓');
-    },1800);
-  }catch(e){
-    if(transferGen===gen){
-      setPlainStatus(statusEl,'Download failed: '+e.message,'error');
-      showToast('Download failed','error');
-    }
-  }finally{
-    setActionButtonsDisabled(type+'Actions',false);
+  // Open the file directly rather than fetching it into a blob first — fetch()
+  // to googleapis.com gets blocked outright by some ad-blockers/VPNs/privacy
+  // extensions ("Failed to fetch"), but plain browser navigation isn't subject
+  // to that, so this is the version that actually works for everyone.
+  const win=window.open(url,'_blank');
+  if(win){
+    setPlainStatus(statusEl,'Opened in a new tab — use your browser\'s save/download option there.');
+    showToast('Opened in a new tab','success');
+  }else{
+    setPlainStatus(statusEl,'Pop-up blocked — open the file directly:');
+    statusEl.innerHTML+=` <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:#3b82f6">Open file →</a>`;
+    showToast('Allow pop-ups to download','error');
   }
 }
 
