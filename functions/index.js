@@ -69,6 +69,12 @@ const QUEUE_DOC = db.collection('board').doc('postingQueue');
 const QUEUE_ITEMS = QUEUE_DOC.collection('items');
 const ACCOUNTS_DOC = db.collection('board').doc('socialAccounts');
 
+// Mirrors STAGES / CAROUSEL_STAGES in app.js — needed to know which stage
+// index counts as "Posted" for each board when auto-advancing a card after
+// a successful publish. Keep in sync if the stage lists ever change.
+const STAGES = ['Script', 'Recording', 'Under editing', 'Ready to post', 'Posted'];
+const CAROUSEL_STAGES = ['Script', 'Working on', 'Ready to post', 'Posted'];
+
 // Mirrors POSTING_ACCOUNTS in app.js just enough to know which platform an
 // account id belongs to. Keep this in sync if accounts are added/removed —
 // or, better, fold platform into the socialAccounts doc so both sides read
@@ -137,6 +143,56 @@ async function runJob(job, secrets, accountsMeta) {
 }
 
 /**
+ * Once a job actually goes out to at least one destination, flip its source
+ * card on the board over to the "Posted" stage — mirroring the audit trail
+ * (stageHistory / stageChangedAt / postedAt) the UI keeps for a manual
+ * drag-to-Posted, and bumping `revision` so connected clients pick up the
+ * change through the same optimistic-concurrency check `saveData` uses
+ * (skipping that bump would let a stale client silently overwrite this).
+ */
+async function markCardPosted(job) {
+  const card = job.card;
+  if (!card || !card.id) return;
+  const isCarousel = card._kind === 'carousel';
+  const boardDocId = isCarousel ? 'carousels' : 'videos';
+  const stages = isCarousel ? CAROUSEL_STAGES : STAGES;
+  const postedStage = stages.length - 1;
+  const ref = db.collection('board').doc(boardDocId);
+  try {
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      const cards = Array.isArray(data.cards) ? data.cards : [];
+      const idx = cards.findIndex(c => c.id === card.id);
+      if (idx === -1 || cards[idx].stage === postedStage) return;
+      const previous = cards[idx];
+      const nowIso = new Date().toISOString();
+      const nextCards = cards.slice();
+      nextCards[idx] = {
+        ...previous,
+        stage: postedStage,
+        stageChangedAt: nowIso,
+        stageHistory: [...(Array.isArray(previous.stageHistory) ? previous.stageHistory : []), {from: previous.stage, to: postedStage, at: nowIso, by: 'auto-publish'}],
+        postedAt: previous.postedAt || nowIso,
+        updatedAt: nowIso,
+        updatedBy: 'auto-publish'
+      };
+      tx.update(ref, {
+        cards: nextCards,
+        revision: Number(data.revision || 0) + 1,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAtMs: Date.now(),
+        updatedBy: 'auto-publish'
+      });
+    });
+    logger.info(`[posting] card ${card.id} (${boardDocId}) auto-advanced to Posted after job ${job.id}`);
+  } catch (e) {
+    logger.error(`[posting] failed to auto-advance card ${card.id} to Posted for job ${job.id}`, e);
+  }
+}
+
+/**
  * Core queue sweep — pulled out of the scheduled trigger so it can also be
  * invoked on demand (see processPostingQueueNow below) for fast manual testing
  * without waiting for the schedule to tick.
@@ -174,6 +230,9 @@ async function sweepQueue(secrets) {
       ...result,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, {merge: true});
+    if (result.status === 'published' || result.status === 'partial') {
+      await markCardPosted(result);
+    }
     processed++;
   }
 

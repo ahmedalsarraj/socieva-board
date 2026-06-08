@@ -69,7 +69,12 @@ console.log(result.data); // {checked, processed}
 3. Results are folded back into the job: `status` becomes `published` /
    `partial` / `failed`, plus `publishedAt`, `error`, and a `results` array
    with one entry per destination (`{accountId, platform, ok, publishedId|error}`).
-4. `renderPostingQueue()` in `app.js` already knows how to render `scheduled`
+4. On `published` / `partial` results, `markCardPosted()` auto-advances the
+   job's source card to the "Posted" stage on its board (`board/videos` or
+   `board/carousels`), appending a `stageHistory` entry and bumping the
+   board's `revision` — exactly like a manual drag-to-Posted — so connected
+   clients pick up the change instead of silently overwriting it.
+5. `renderPostingQueue()` in `app.js` already knows how to render `scheduled`
    / `published` / `failed` states — `partial` will currently fall through to
    whatever the default status styling is; you may want to add an explicit
    case for it in `postingStatusLabel()`.
