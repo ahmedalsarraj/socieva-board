@@ -68,6 +68,9 @@ let boardSnapshotUnsub = null;
 let boardSnapshotMode = null;
 let pendingSnapshotPayload = null;
 let boardRevision = 0;
+let cardBaselineData = new Map();
+let cardBaselineRev = new Map();
+let settingsBaselineJson = '';
 
 // ========== CONSTANTS ==========
 const STAGES          = ['Script','Recording','Under editing','Ready to post','Posted'];
@@ -127,15 +130,59 @@ function initFirebaseBackend(){
 }
 
 function firebaseBoardDoc(){return boardMode==='carousels'?'carousels':'videos'}
+function firebaseBoardRef(mode=boardMode){return firebaseDb.collection('board').doc(mode==='carousels'?'carousels':'videos')}
+function firebaseCardsRef(mode=boardMode){return firebaseBoardRef(mode).collection('cards')}
 function firebaseBoardCacheKey(mode=boardMode){return FIREBASE_BOARD_CACHE_PREFIX+mode}
+function cleanCardForStorage(card){
+  const out=JSON.parse(JSON.stringify(card||{}));
+  delete out._rev;
+  delete out.thumbDisplayUrl;
+  delete out.vidDisplayUrl;
+  if(Array.isArray(out.images)){
+    out.images=out.images.map(img=>{
+      const clean={...img};
+      delete clean.downloadUrl;
+      return clean;
+    });
+  }
+  return out;
+}
+function cardFromDoc(doc){
+  const data=doc.data()||{};
+  return{id:doc.id,...data,_rev:Number(data._rev||0)};
+}
+function cardsFromSnapshot(snap){
+  const list=snap.docs.map(cardFromDoc);
+  if(list.some(card=>Number.isFinite(card.sortIndex))){
+    return list.sort((a,b)=>(Number.isFinite(a.sortIndex)?a.sortIndex:Number.MAX_SAFE_INTEGER)-(Number.isFinite(b.sortIndex)?b.sortIndex:Number.MAX_SAFE_INTEGER));
+  }
+  return list;
+}
+function cardBaselineJson(card){return JSON.stringify(cleanCardForStorage(card));}
+function setCardBaselines(list){
+  cardBaselineData=new Map();
+  cardBaselineRev=new Map();
+  (list||[]).forEach(card=>{
+    if(!card?.id)return;
+    cardBaselineData.set(card.id,cardBaselineJson(card));
+    cardBaselineRev.set(card.id,Number(card._rev||0));
+  });
+}
+function setSettingsBaseline(){
+  settingsBaselineJson=JSON.stringify(normalizeSettings(getSettings()));
+}
 function applyBoardPayload(data,mode=boardMode){
   boardRevision = Number(data?.revision || 0);
   if(mode==='carousels'){
     cards=Array.isArray(data?.cards)?data.cards:[];
+    setCardBaselines(cards);
+    setSettingsBaseline();
     return;
   }
   if(data)parseBoardData(data);
   else{cards=[];boardSettings=defaultSettings();}
+  setCardBaselines(cards);
+  setSettingsBaseline();
 }
 function cacheFirebaseBoardPayload(mode,payload){
   try{localStorage.setItem(firebaseBoardCacheKey(mode),JSON.stringify({cachedAt:Date.now(),payload}));}catch(e){}
@@ -431,16 +478,43 @@ function subscribeFirebaseBoard(mode=boardMode){
   setSyncDot('syncing');
   return new Promise((resolve,reject)=>{
     let first=true;
-    boardSnapshotUnsub=firebaseDb.collection('board').doc(mode==='carousels'?'carousels':'videos')
-      .onSnapshot(doc=>{
-        const payload=doc.exists?doc.data():{version:mode==='carousels'?1:2,cards:[],settings:mode==='videos'?defaultSettings():undefined};
-        applySyncedBoardPayload(mode,payload,{fromCache:doc.metadata?.fromCache});
-        if(first){first=false;resolve(true);}
-      },err=>{
+    let latestCards=null;
+    let latestMeta=null;
+    let lastFromCache=false;
+    const applyLatest=()=>{
+      if(!latestCards)return;
+      const payload={
+        version:mode==='carousels'?1:2,
+        cards:latestCards,
+        settings:mode==='videos'?normalizeSettings(latestMeta?.settings):undefined,
+        revision:Number(latestMeta?.revision||0)
+      };
+      applySyncedBoardPayload(mode,payload,{fromCache:lastFromCache});
+    };
+    const fail=err=>{
         console.warn('Board realtime sync failed',err);
         setSyncDot('error');
         if(first){first=false;reject(err);}
-      });
+    };
+    const metaUnsub=firebaseBoardRef(mode).onSnapshot(doc=>{
+      latestMeta=doc.exists?doc.data():{};
+      lastFromCache=doc.metadata?.fromCache;
+      applyLatest();
+    },fail);
+    const cardsUnsub=firebaseCardsRef(mode).onSnapshot(async snap=>{
+      try{
+        latestCards=cardsFromSnapshot(snap);
+        lastFromCache=snap.metadata?.fromCache;
+        if(!latestCards.length){
+          const metaSnap=await firebaseBoardRef(mode).get();
+          const meta=metaSnap.exists?metaSnap.data():null;
+          if(await migrateLegacyCardsIfNeeded(mode,meta,0))return;
+        }
+        applyLatest();
+        if(first){first=false;resolve(true);}
+      }catch(e){fail(e);}
+    },fail);
+    boardSnapshotUnsub=()=>{metaUnsub();cardsUnsub();};
   });
 }
 
@@ -517,34 +591,125 @@ function parseBoardData(data){
 
 function buildBoardPayload(){return{version:2,settings:normalizeSettings(getSettings()),cards};}
 
+async function migrateLegacyCardsIfNeeded(mode,legacyData,existingCount){
+  if(existingCount||!Array.isArray(legacyData?.cards)||!legacyData.cards.length)return false;
+  const batch=firebaseDb.batch();
+  legacyData.cards.forEach((raw,index)=>{
+    const card={...raw,id:raw.id||uid(),sortIndex:Number.isFinite(raw.sortIndex)?raw.sortIndex:index,_rev:Number(raw._rev||0)};
+    const ref=firebaseCardsRef(mode).doc(card.id);
+    batch.set(ref,{...cleanCardForStorage(card),_rev:card._rev});
+  });
+  batch.set(firebaseBoardRef(mode),{
+    version:mode==='carousels'?1:2,
+    settings:mode==='videos'?normalizeSettings(legacyData.settings):firebase.firestore.FieldValue.delete(),
+    revision:Number(legacyData.revision||0),
+    migratedFromArrayAt:firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
+  await batch.commit();
+  return true;
+}
+
 async function loadData(){
-  const doc=await firebaseDb.collection('board').doc(firebaseBoardDoc()).get();
-  const data=doc.exists?doc.data():null;
-  applyBoardPayload(data,boardMode);
-  cacheFirebaseBoardPayload(boardMode,data||{version:boardMode==='carousels'?1:2,cards,settings:boardMode==='videos'?normalizeSettings(getSettings()):undefined});
+  const mode=boardMode;
+  const [metaDoc,cardsSnap]=await Promise.all([firebaseBoardRef(mode).get(),firebaseCardsRef(mode).get()]);
+  const meta=metaDoc.exists?metaDoc.data():null;
+  if(!cardsSnap.empty){
+    cards=cardsFromSnapshot(cardsSnap);
+    boardRevision=Number(meta?.revision||0);
+    if(mode==='videos')boardSettings=normalizeSettings(meta?.settings);
+    else boardSettings=boardSettings||defaultSettings();
+    setCardBaselines(cards);
+    setSettingsBaseline();
+    cacheFirebaseBoardPayload(mode,{version:mode==='carousels'?1:2,cards,settings:mode==='videos'?normalizeSettings(getSettings()):undefined,revision:boardRevision});
+    return;
+  }
+  if(await migrateLegacyCardsIfNeeded(mode,meta,0)){
+    return loadData();
+  }
+  applyBoardPayload(meta,mode);
+  cacheFirebaseBoardPayload(mode,meta||{version:mode==='carousels'?1:2,cards,settings:mode==='videos'?normalizeSettings(getSettings()):undefined});
 }
 
 async function saveData(){
-  const ref=firebaseDb.collection('board').doc(firebaseBoardDoc());
-  const payload=boardMode==='carousels'?{version:1,cards}:buildBoardPayload();
-  const nextRevision=await firebaseDb.runTransaction(async tx=>{
-    const snap=await tx.get(ref);
-    const remoteRevision=Number(snap.exists?(snap.data()?.revision||0):0);
-    if(remoteRevision!==boardRevision){
-      throw new Error('This board changed in another session. Close this editor, review the latest board, then retry your edit.');
+  const mode=boardMode;
+  const currentIds=new Set(cards.map(c=>c.id).filter(Boolean));
+  const changed=cards.filter(c=>!cardBaselineData.has(c.id)||cardBaselineData.get(c.id)!==cardBaselineJson(c));
+  const deleted=[...cardBaselineData.keys()].filter(id=>!currentIds.has(id));
+  const settingsJson=JSON.stringify(normalizeSettings(getSettings()));
+  const settingsChanged=mode==='videos'&&settingsJson!==settingsBaselineJson;
+  const savedCardRevs=new Map();
+
+  const nextBoardRevision=await firebaseDb.runTransaction(async tx=>{
+    savedCardRevs.clear();
+    const metaRef=firebaseBoardRef(mode);
+    const metaSnap=await tx.get(metaRef);
+    const remoteRevision=Number(metaSnap.exists?(metaSnap.data()?.revision||0):0);
+    if(settingsChanged&&remoteRevision!==boardRevision){
+      throw new Error('Settings changed in another session. Close settings, review the latest board, then retry.');
     }
-    const revision=remoteRevision+1;
-    tx.set(ref,{
-      ...payload,
-      revision,
+
+    const changedReads=[];
+    for(const card of changed){
+      const ref=firebaseCardsRef(mode).doc(card.id);
+      const snap=await tx.get(ref);
+      changedReads.push({card,ref,snap});
+    }
+    const deletedReads=[];
+    for(const id of deleted){
+      const ref=firebaseCardsRef(mode).doc(id);
+      const snap=await tx.get(ref);
+      deletedReads.push({id,ref,snap});
+    }
+
+    for(const {card,ref,snap} of changedReads){
+      const remoteRev=Number(snap.exists?(snap.data()?._rev||0):0);
+      const expectedRev=Number(cardBaselineRev.get(card.id)||0);
+      if(remoteRev!==expectedRev){
+        throw new Error(`"${card.name||'This card'}" changed in another session. Close this editor, review the latest card, then retry.`);
+      }
+      const nextRev=remoteRev+1;
+      savedCardRevs.set(card.id,nextRev);
+      tx.set(ref,{
+        ...cleanCardForStorage(card),
+        sortIndex:cards.findIndex(item=>item.id===card.id),
+        _rev:nextRev,
+        updatedAt:card.updatedAt||new Date().toISOString(),
+        updatedAtMs:Date.now(),
+        updatedBy:currentSession?.userId||null
+      },{merge:false});
+    }
+
+    for(const {id,ref,snap} of deletedReads){
+      if(snap.exists){
+        const remoteRev=Number(snap.data()?._rev||0);
+        const expectedRev=Number(cardBaselineRev.get(id)||0);
+        if(remoteRev!==expectedRev){
+          throw new Error('A deleted card changed in another session. Refresh and retry.');
+        }
+        tx.delete(ref);
+      }
+    }
+
+    const nextRevision=settingsChanged?remoteRevision+1:remoteRevision;
+    tx.set(metaRef,{
+      version:mode==='carousels'?1:2,
+      ...(mode==='videos'?{settings:normalizeSettings(getSettings())}:{}),
+      revision:nextRevision,
       updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
       updatedAtMs:Date.now(),
-      updatedBy:currentSession?.userId||null
-    },{merge:false});
-    return revision;
+      updatedBy:currentSession?.userId||null,
+      storageModel:'cards-subcollection'
+    },{merge:true});
+    return nextRevision;
   });
-  boardRevision=nextRevision;
-  cacheFirebaseBoardPayload(boardMode,{...payload,revision:nextRevision});
+
+  boardRevision=nextBoardRevision;
+  cards.forEach(card=>{
+    if(savedCardRevs.has(card.id))card._rev=savedCardRevs.get(card.id);
+  });
+  setCardBaselines(cards);
+  setSettingsBaseline();
+  cacheFirebaseBoardPayload(mode,{version:mode==='carousels'?1:2,cards,settings:mode==='videos'?normalizeSettings(getSettings()):undefined,revision:boardRevision});
 }
 
 async function switchBoardMode(mode){
@@ -1065,8 +1230,8 @@ function renderCard(c){
   const ini=escHtml(initials(c.assign||c.presenter||'?'));
   const catCls=CAT_TAG[c.category]||'tag-gen';
   const hasScript=!!(c.script&&c.script.trim());
-  const thumbSrc=safeUrl(c.thumbDisplayUrl);
-  const vidSrc=safeUrl(c.vidDisplayUrl);
+  const thumbSrc=safeUrl(c.thumbDisplayUrl)||safeUrl(c.thumbUrl);
+  const vidSrc=safeUrl(c.vidDisplayUrl)||safeUrl(c.vidUrl);
   const dueSt=dueDateStatus(c.dueDate,c.stage);
   const thumbTile=thumbSrc
     ?`<div class="card-media-item has-file" title="Thumbnail preview" onclick="event.stopPropagation();openLightbox('img',${jsArg(thumbSrc)},${jsArg(c.name||'')})"><img src="${escHtml(thumbSrc)}" onerror="this.parentElement.classList.remove('has-file');this.parentElement.innerHTML='<div class=&quot;card-media-empty&quot;><svg viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.5&quot;><rect x=&quot;3&quot; y=&quot;5&quot; width=&quot;18&quot; height=&quot;14&quot; rx=&quot;2&quot;/><path d=&quot;M3 14l4-4 3 3 4-5 4 6&quot;/></svg><span>Thumbnail</span></div>'"><span class="card-media-caption">Thumbnail</span></div>`
@@ -1074,7 +1239,7 @@ function renderCard(c){
   const isCarouselCard=boardMode==='carousels';
   let mediaSectionHtml;
   if(isCarouselCard){
-    const imgs=Array.isArray(c.images)&&c.images.length?c.images:(c.thumbDisplayUrl?[{downloadUrl:c.thumbDisplayUrl,shareUrl:c.thumbUrl}]:[]);
+    const imgs=Array.isArray(c.images)&&c.images.length?c.images:((c.thumbDisplayUrl||c.thumbUrl)?[{downloadUrl:c.thumbDisplayUrl,shareUrl:c.thumbUrl}]:[]);
     if(!imgs.length){
       mediaSectionHtml=`<div class="card-media" style="grid-template-columns:1fr"><div class="card-media-item" style="aspect-ratio:16/9"><div class="card-media-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/></svg><span>No images</span></div></div></div>`;
     }else{
@@ -1334,7 +1499,7 @@ function openEdit(id){
     document.getElementById('carouselImagesStatus').textContent=`${carouselImages.length} image${carouselImages.length>1?'s':''} uploaded ✓`;
   }
   if(c.thumbUrl){
-    thumbItemId=c.thumbItemId||null;thumbDisplayUrl=c.thumbDisplayUrl||null;
+    thumbItemId=c.thumbItemId||null;thumbDisplayUrl=c.thumbDisplayUrl||c.thumbUrl||null;
     document.getElementById('thumbStatus').textContent='File uploaded ✓';
     document.getElementById('thumbLabel').textContent='Change image';
     const tv=safeUrl(c.thumbUrl);
@@ -1343,7 +1508,7 @@ function openEdit(id){
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
   if(c.vidUrl){
-    vidItemId=c.vidItemId||null;vidDisplayUrl=c.vidDisplayUrl||null;
+    vidItemId=c.vidItemId||null;vidDisplayUrl=c.vidDisplayUrl||c.vidUrl||null;
     document.getElementById('vidStatus').textContent='File uploaded ✓';
     document.getElementById('vidLabel').textContent='Change video';
     const vv=safeUrl(c.vidUrl);
@@ -1867,7 +2032,7 @@ async function saveInstagramConnection(){
 }
 
 function postingThumbSrc(c){
-  return safeUrl(c.thumbDisplayUrl)||safeUrl((Array.isArray(c.images)&&c.images[0])?(c.images[0].downloadUrl||c.images[0].shareUrl):'');
+  return safeUrl(c.thumbDisplayUrl)||safeUrl(c.thumbUrl)||safeUrl((Array.isArray(c.images)&&c.images[0])?(c.images[0].downloadUrl||c.images[0].shareUrl):'');
 }
 function postingVideoSrc(c){
   return c._kind==='video'?(safeUrl(c.vidDisplayUrl)||safeUrl(c.vidUrl)):'';
@@ -1876,12 +2041,16 @@ function postingVideoSrc(c){
 async function loadPostingReadyCards(){
   try{
     initFirebaseBackend();
-    const [vidDoc,carDoc]=await Promise.all([
-      firebaseDb.collection('board').doc('videos').get(),
-      firebaseDb.collection('board').doc('carousels').get()
+    const [vidSnap,carSnap,vidDoc,carDoc]=await Promise.all([
+      firebaseCardsRef('videos').get(),
+      firebaseCardsRef('carousels').get(),
+      firebaseBoardRef('videos').get(),
+      firebaseBoardRef('carousels').get()
     ]);
-    const vidCards=vidDoc.exists&&Array.isArray(vidDoc.data()?.cards)?vidDoc.data().cards:[];
-    const carCards=carDoc.exists&&Array.isArray(carDoc.data()?.cards)?carDoc.data().cards:[];
+    const vidLegacy=vidDoc.exists&&Array.isArray(vidDoc.data()?.cards)?vidDoc.data().cards:[];
+    const carLegacy=carDoc.exists&&Array.isArray(carDoc.data()?.cards)?carDoc.data().cards:[];
+    const vidCards=vidSnap.empty?vidLegacy:cardsFromSnapshot(vidSnap);
+    const carCards=carSnap.empty?carLegacy:cardsFromSnapshot(carSnap);
     const vidReadyIdx=STAGES.indexOf('Ready to post');
     const carReadyIdx=CAROUSEL_STAGES.indexOf('Ready to post');
     postingReadyCards=[

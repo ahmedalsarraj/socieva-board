@@ -39,6 +39,10 @@ service cloud.firestore {
 
       allow read, write: if adminUser() && docId in ["socialAccounts", "postingQueue"];
 
+      match /cards/{cardId} {
+        allow read, write: if activeUser() && docId in ["videos", "carousels"];
+      }
+
       match /items/{jobId} {
         allow read, write: if adminUser() && docId == "postingQueue";
       }

@@ -146,9 +146,17 @@ async function runJob(job, secrets, accountsMeta) {
  * Once a job actually goes out to at least one destination, flip its source
  * card on the board over to the "Posted" stage — mirroring the audit trail
  * (stageHistory / stageChangedAt / postedAt) the UI keeps for a manual
- * drag-to-Posted, and bumping `revision` so connected clients pick up the
- * change through the same optimistic-concurrency check `saveData` uses
- * (skipping that bump would let a stale client silently overwrite this).
+ * drag-to-Posted.
+ *
+ * Cards can currently live in either of two shapes (the client migrates a
+ * board lazily, the first time someone opens it, from the old shape to the
+ * new one — so both can be live in production at once):
+ *   - new:    board/{mode}/cards/{cardId} documents, each with its own `_rev`
+ *             — bump `_rev` so app.js's per-card conflict check still works
+ *   - legacy: a `cards` array on the board/{mode} doc, guarded by the doc's
+ *             whole-board `revision` — bump `revision` so app.js's
+ *             whole-board conflict check still works
+ * Pick whichever shape the card is actually stored in; don't touch the other.
  */
 async function markCardPosted(job) {
   const card = job.card;
@@ -157,17 +165,36 @@ async function markCardPosted(job) {
   const boardDocId = isCarousel ? 'carousels' : 'videos';
   const stages = isCarousel ? CAROUSEL_STAGES : STAGES;
   const postedStage = stages.length - 1;
-  const ref = db.collection('board').doc(boardDocId);
+  const boardRef = db.collection('board').doc(boardDocId);
+  const cardRef = boardRef.collection('cards').doc(card.id);
   try {
-    await db.runTransaction(async tx => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const data = snap.data() || {};
+    const advanced = await db.runTransaction(async tx => {
+      const cardSnap = await tx.get(cardRef);
+      const nowIso = new Date().toISOString();
+
+      if (cardSnap.exists) {
+        const data = cardSnap.data() || {};
+        if (data.stage === postedStage) return false;
+        tx.update(cardRef, {
+          stage: postedStage,
+          stageChangedAt: nowIso,
+          stageHistory: [...(Array.isArray(data.stageHistory) ? data.stageHistory : []), {from: data.stage, to: postedStage, at: nowIso, by: 'auto-publish'}],
+          postedAt: data.postedAt || nowIso,
+          updatedAt: nowIso,
+          updatedAtMs: Date.now(),
+          updatedBy: 'auto-publish',
+          _rev: Number(data._rev || 0) + 1
+        });
+        return true;
+      }
+
+      const boardSnap = await tx.get(boardRef);
+      if (!boardSnap.exists) return false;
+      const data = boardSnap.data() || {};
       const cards = Array.isArray(data.cards) ? data.cards : [];
       const idx = cards.findIndex(c => c.id === card.id);
-      if (idx === -1 || cards[idx].stage === postedStage) return;
+      if (idx === -1 || cards[idx].stage === postedStage) return false;
       const previous = cards[idx];
-      const nowIso = new Date().toISOString();
       const nextCards = cards.slice();
       nextCards[idx] = {
         ...previous,
@@ -178,15 +205,16 @@ async function markCardPosted(job) {
         updatedAt: nowIso,
         updatedBy: 'auto-publish'
       };
-      tx.update(ref, {
+      tx.update(boardRef, {
         cards: nextCards,
         revision: Number(data.revision || 0) + 1,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAtMs: Date.now(),
         updatedBy: 'auto-publish'
       });
+      return true;
     });
-    logger.info(`[posting] card ${card.id} (${boardDocId}) auto-advanced to Posted after job ${job.id}`);
+    if (advanced) logger.info(`[posting] card ${card.id} (${boardDocId}) auto-advanced to Posted after job ${job.id}`);
   } catch (e) {
     logger.error(`[posting] failed to auto-advance card ${card.id} to Posted for job ${job.id}`, e);
   }

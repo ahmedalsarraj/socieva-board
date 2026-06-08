@@ -29,8 +29,10 @@ Main Firestore documents:
 
 | Path | Purpose |
 | --- | --- |
-| `board/videos` | Video board cards and settings |
-| `board/carousels` | Carousel board cards |
+| `board/videos` | Video board metadata and settings |
+| `board/videos/cards/{cardId}` | One video card per document |
+| `board/carousels` | Carousel board metadata |
+| `board/carousels/cards/{cardId}` | One carousel card per document |
 | `board/socialAccounts` | Non-secret posting account metadata, admin-only |
 | `board/postingQueue/items/{jobId}` | Posting queue and history, admin-only |
 | `users/{uid}` | User profile, role, and active flag |
@@ -106,7 +108,7 @@ Deploy rules from the Firebase CLI after review:
 firebase deploy --only firestore:rules,storage
 ```
 
-Keep `board/socialAccounts` and `board/postingQueue` admin-only. Platform access tokens must not be stored in Firestore or frontend code.
+Keep `board/socialAccounts` and `board/postingQueue` admin-only. Board cards are stored as individual documents under `board/videos/cards` and `board/carousels/cards` so a single edit does not rewrite the whole board. Platform access tokens must not be stored in Firestore or frontend code.
 
 ## Posting
 
@@ -142,7 +144,7 @@ Run this after deployment:
 - Create a new video card.
 - Upload a small thumbnail.
 - Save the card.
-- Confirm Firestore has `board/videos`.
+- Confirm Firestore has `board/videos` and `board/videos/cards/{cardId}`.
 - Confirm Storage has a file under `uploads/thumbnails/`.
 - Download the uploaded thumbnail from the board.
 - Switch to Carousels and back to Videos.
