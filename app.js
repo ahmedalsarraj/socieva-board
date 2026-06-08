@@ -1621,18 +1621,36 @@ async function downloadUpload(type){
         setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
       });
     }catch(e){
-      // Mobile connections drop mid-stream often enough that a single retry
-      // with a freshly-minted URL clears most "Failed to fetch" failures.
       if(transferGen!==gen)throw e;
-      if(itemId){
-        setTransferStatus(statusEl,'Connection dropped, retrying…',0);
-        url=await firebaseRefreshDownloadUrl(itemId);
-        if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
+      // "Failed to fetch" can mean a dropped connection (worth one retry with
+      // a fresh URL) or a fetch() blocked outright by an ad-blocker / VPN /
+      // privacy extension on the googleapis.com domain (no amount of
+      // retrying helps that — only a direct browser navigation does, since
+      // navigation isn't subject to the same blocking as fetch()).
+      if(!/failed to fetch/i.test(e.message||''))throw e;
+      try{
+        if(itemId){
+          setTransferStatus(statusEl,'Retrying…',0);
+          url=await firebaseRefreshDownloadUrl(itemId);
+          if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
+        }
+        blob=await fetchBlobWithProgress(url,pct=>{
+          if(transferGen!==gen)return;
+          setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
+        });
+      }catch(e2){
+        if(transferGen!==gen)throw e2;
+        const win=window.open(url,'_blank');
+        if(win){
+          setPlainStatus(statusEl,'Opened the file in a new tab — use your browser\'s save/download option there.');
+          showToast('Opened in a new tab — save it from there','success');
+        }else{
+          setPlainStatus(statusEl,'Download blocked — likely an ad-blocker or VPN on this network. Try a different network/browser, or open the link directly:','error');
+          statusEl.innerHTML+=` <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:#3b82f6">Open file →</a>`;
+          showToast('Download blocked on this network','error');
+        }
+        return;
       }
-      blob=await fetchBlobWithProgress(url,pct=>{
-        if(transferGen!==gen)return;
-        setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
-      });
     }
     if(transferGen!==gen)return;
     triggerBlobDownload(blob,name+'-'+(type==='thumb'?'thumbnail':'video')+ext);
@@ -1643,10 +1661,7 @@ async function downloadUpload(type){
     },1800);
   }catch(e){
     if(transferGen===gen){
-      const msg=/failed to fetch/i.test(e.message||'')
-        ?'Download failed: connection dropped. Check your network and try again.'
-        :'Download failed: '+e.message;
-      setPlainStatus(statusEl,msg,'error');
+      setPlainStatus(statusEl,'Download failed: '+e.message,'error');
       showToast('Download failed','error');
     }
   }finally{
