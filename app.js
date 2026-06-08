@@ -2204,6 +2204,7 @@ const POSTING_PLATFORM_DOT_COLOR={instagram:'#e1306c',youtube:'#ff0000',tiktok:'
 const POSTING_SHOW_CONNECT_UI=true;
 let postingReadyCards=[];
 let postingQueue=[]; // persisted — {id, card, destinations:[ids], caption, mode:'now'|'schedule', scheduledAt, status, error, publishedAt}
+let postingQueueVisible=5; // how many queue items to show before "Show more"
 let postingComposeCard=null;
 let postingSelectedDest=new Set();
 let postingWhenMode='now';
@@ -2397,7 +2398,9 @@ function renderPostingQueue(){
     return;
   }
   const sorted=[...postingQueue].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  list.innerHTML=sorted.map(item=>{
+  const visible=sorted.slice(0,postingQueueVisible);
+  const remaining=sorted.length-postingQueueVisible;
+  list.innerHTML=visible.map(item=>{
     const c=item.card;
     const thumb=postingThumbSrc(c);
     const media=thumb?`<img src="${escHtml(thumb)}" alt="">`:'';
@@ -2422,7 +2425,15 @@ function renderPostingQueue(){
         ${ytLine}
       </div>
     </div>`;
-  }).join('');
+  }).join('')+(remaining>0
+    ?`<button class="posting-show-more-btn" id="postingShowMoreBtn">Show ${Math.min(remaining,5)} more <span style="color:var(--text3)">(${remaining} remaining)</span></button>`
+    :'');
+  if(remaining>0){
+    document.getElementById('postingShowMoreBtn').addEventListener('click',()=>{
+      postingQueueVisible+=5;
+      renderPostingQueue();
+    });
+  }
 }
 
 function postingDefaultCaption(c){
@@ -2596,6 +2607,7 @@ async function confirmPostingCompose(){
 
 async function openPosting(){
   if(!canManageSettings()){showToast('Posting is restricted to admins','error');return;}
+  postingQueueVisible=5; // reset pagination each time the overlay opens
   document.getElementById('postingOverlay').classList.add('open');
   await loadPostingSocialAccounts();
   await loadPostingQueue();
