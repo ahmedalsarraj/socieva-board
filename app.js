@@ -524,25 +524,43 @@ async function loadData(){
 
 async function saveData(){
   const ref=firebaseDb.collection('board').doc(firebaseBoardDoc());
-  const payload=boardMode==='carousels'?{version:1,cards}:buildBoardPayload();
-  const nextRevision=await firebaseDb.runTransaction(async tx=>{
-    const snap=await tx.get(ref);
-    const remoteRevision=Number(snap.exists?(snap.data()?.revision||0):0);
-    if(remoteRevision!==boardRevision){
-      throw new Error('This board changed in another session. Refresh and retry your edit.');
+  // Stale boardRevision is common (e.g. a remote update arrived while the edit
+  // modal was open and got deferred — see applySyncedBoardPayload/boardUiBusy).
+  // On a mismatch, re-sync to the server's current revision and retry once
+  // before treating it as a genuine conflict — mirrors the 412 retry-once fix
+  // from the OneDrive backend (see "Fix false-positive 412 conflicts on save").
+  for(let attempt=0;attempt<2;attempt++){
+    const payload=boardMode==='carousels'?{version:1,cards}:buildBoardPayload();
+    try{
+      const nextRevision=await firebaseDb.runTransaction(async tx=>{
+        const snap=await tx.get(ref);
+        const remoteRevision=Number(snap.exists?(snap.data()?.revision||0):0);
+        if(remoteRevision!==boardRevision){
+          const e=new Error('revision-mismatch');
+          e.code='revision-mismatch';e.remoteRevision=remoteRevision;
+          throw e;
+        }
+        const revision=remoteRevision+1;
+        tx.set(ref,{
+          ...payload,
+          revision,
+          updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAtMs:Date.now(),
+          updatedBy:currentSession?.userId||null
+        },{merge:false});
+        return revision;
+      });
+      boardRevision=nextRevision;
+      cacheFirebaseBoardPayload(boardMode,{...payload,revision:nextRevision});
+      return;
+    }catch(e){
+      if(e.code==='revision-mismatch'){
+        if(attempt===0){boardRevision=e.remoteRevision;continue;}
+        throw new Error('This board changed in another session. Refresh and retry your edit.');
+      }
+      throw e;
     }
-    const revision=remoteRevision+1;
-    tx.set(ref,{
-      ...payload,
-      revision,
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAtMs:Date.now(),
-      updatedBy:currentSession?.userId||null
-    },{merge:false});
-    return revision;
-  });
-  boardRevision=nextRevision;
-  cacheFirebaseBoardPayload(boardMode,{...payload,revision:nextRevision});
+  }
 }
 
 async function switchBoardMode(mode){
