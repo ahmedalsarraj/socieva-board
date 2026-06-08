@@ -1155,8 +1155,11 @@ function renderAll(){
   const sx=bw?bw.scrollLeft:0;
   const fc=getFiltered();
   renderStats(fc);
+  const postedIdx=currentStages().length-1;
   document.getElementById('board').innerHTML=currentStages().map((s,i)=>{
-    const stageCards=sortCards(fc.filter(c=>c.stage===i));
+    const stageCards=i===postedIdx
+      ?fc.filter(c=>c.stage===i).sort((a,b)=>(dateTimeKey(b.updatedAt)||0)-(dateTimeKey(a.updatedAt)||0))
+      :sortCards(fc.filter(c=>c.stage===i));
     const expanded=expandedStages.has(i);
     const visibleCards=expanded?stageCards:stageCards.slice(0,CARD_COLLAPSE_LIMIT);
     const hiddenCount=stageCards.length-visibleCards.length;
