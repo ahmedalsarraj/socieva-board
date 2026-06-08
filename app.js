@@ -1802,6 +1802,9 @@ async function saveInstagramConnection(){
 function postingThumbSrc(c){
   return safeUrl(c.thumbDisplayUrl)||safeUrl((Array.isArray(c.images)&&c.images[0])?(c.images[0].downloadUrl||c.images[0].shareUrl):'');
 }
+function postingVideoSrc(c){
+  return c._kind==='video'?(safeUrl(c.vidDisplayUrl)||safeUrl(c.vidUrl)):'';
+}
 
 async function loadPostingReadyCards(){
   try{
@@ -1850,11 +1853,18 @@ function renderPostingReadyGrid(){
   grid.style.display='';
   grid.innerHTML=postingReadyCards.map((c,i)=>{
     const thumb=postingThumbSrc(c);
-    const media=thumb
-      ?`<img src="${escHtml(thumb)}" alt="">`
-      :`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/></svg>`;
+    const vidSrc=postingVideoSrc(c);
+    const videoPoster=thumb?` poster="${escHtml(thumb)}"`:'';
+    let media;
+    if(vidSrc){
+      media=`<video class="card-video-preview" src="${escHtml(vidSrc)}"${videoPoster} preload="metadata" muted playsinline onloadedmetadata="try{if(this.currentTime===0)this.currentTime=0.1}catch(e){}"></video><div class="card-media-play">▶</div><span class="card-media-caption">Video — click to preview</span>`;
+    }else if(thumb){
+      media=`<img src="${escHtml(thumb)}" alt="">`;
+    }else{
+      media=`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14l4-4 3 3 4-5 4 6"/></svg>`;
+    }
     return`<div class="posting-card" data-idx="${i}">
-      <div class="posting-card-thumb">
+      <div class="posting-card-thumb${vidSrc?' has-video':''}" ${vidSrc?`data-vid="${escHtml(vidSrc)}" data-name="${escHtml(c.name||'')}"`:''}>
         <span class="posting-card-type">${c._kind}</span>
         ${media}
       </div>
@@ -1862,6 +1872,12 @@ function renderPostingReadyGrid(){
       <div class="posting-card-meta">${escHtml(c.category||'—')} · ${escHtml(c.format||'')}</div>
     </div>`;
   }).join('');
+  grid.querySelectorAll('.posting-card-thumb.has-video').forEach(el=>{
+    el.addEventListener('click',e=>{
+      e.stopPropagation();
+      openLightbox('vid',el.dataset.vid,el.dataset.name);
+    });
+  });
   grid.querySelectorAll('.posting-card').forEach(el=>{
     el.addEventListener('click',()=>openPostingCompose(postingReadyCards[parseInt(el.dataset.idx)]));
   });
@@ -1923,12 +1939,21 @@ function openPostingCompose(c){
   postingSelectedDest=new Set();
   postingWhenMode='now';
   const thumb=postingThumbSrc(c);
+  const vidSrc=postingVideoSrc(c);
+  const previewMedia=vidSrc
+    ?`<div class="posting-queue-thumb has-video" data-vid="${escHtml(vidSrc)}" data-name="${escHtml(c.name||'')}" title="Click to preview the video">${thumb?`<img src="${escHtml(thumb)}" alt="">`:''}<div class="card-media-play" style="font-size:14px">▶</div></div>`
+    :`<div class="posting-queue-thumb">${thumb?`<img src="${escHtml(thumb)}" alt="">`:''}</div>`;
   document.getElementById('postingComposePreview').innerHTML=`
-    <div class="posting-queue-thumb">${thumb?`<img src="${escHtml(thumb)}" alt="">`:''}</div>
+    ${previewMedia}
     <div class="posting-queue-main">
       <div class="posting-queue-title">${escHtml(c.name||'Untitled')}</div>
-      <div class="posting-queue-sub"><span class="tag" style="background:rgba(244,235,232,0.08);color:var(--text3)">${escHtml(c._kind)}</span><span>${escHtml(c.category||'—')}</span></div>
+      <div class="posting-queue-sub"><span class="tag" style="background:rgba(244,235,232,0.08);color:var(--text3)">${escHtml(c._kind)}</span><span>${escHtml(c.category||'—')}</span>${vidSrc?'<span style="color:var(--text3)">· <a href="javascript:void(0)" id="postingPreviewVideoLink">preview video</a></span>':''}</div>
     </div>`;
+  if(vidSrc){
+    const openVidPreview=()=>openLightbox('vid',vidSrc,c.name||'');
+    document.getElementById('postingComposePreview').querySelector('.posting-queue-thumb.has-video')?.addEventListener('click',openVidPreview);
+    document.getElementById('postingPreviewVideoLink')?.addEventListener('click',openVidPreview);
+  }
   const caption=postingDefaultCaption(c);
   const captionEl=document.getElementById('postingCaption');
   captionEl.value=caption;
