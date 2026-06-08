@@ -174,6 +174,11 @@
 <div class="reports-overlay" id="reportsOverlay">
   <div class="reports-header">
     <span class="reports-title">Reports</span>
+    <div class="report-tabs">
+      <button class="report-tab active" data-report-tab="board">Board report</button>
+      <button class="report-tab" data-report-tab="platforms" id="platformReportTabBtn" style="display:none">Platforms report</button>
+    </div>
+    <select class="report-platform-select" id="platformReportAccount" style="display:none"></select>
     <button class="period-btn active" data-period="all">All time</button>
     <button class="period-btn" data-period="today">Today</button>
     <button class="period-btn" data-period="week">This week</button>

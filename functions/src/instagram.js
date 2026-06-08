@@ -155,49 +155,125 @@ async function publishContainer({igUserId, containerId, accessToken}) {
   return res.id;
 }
 
-async function testInstagramInsights({accountId, accountMeta, secrets}) {
+function metricValue(insights, name) {
+  const item = Array.isArray(insights?.data) ? insights.data.find(m => m.name === name) : null;
+  const value = Array.isArray(item?.values) ? item.values[item.values.length - 1]?.value : item?.value;
+  return Number(value || 0);
+}
+
+function inDateRange(timestamp, from, to) {
+  const day = String(timestamp || '').slice(0, 10);
+  if (!day) return false;
+  if (from && day < from) return false;
+  if (to && day > to) return false;
+  return true;
+}
+
+async function getMediaInsights(mediaId, accessToken) {
+  const metricSets = [
+    'views,reach,total_interactions,likes,comments,shares,saved',
+    'reach,total_interactions,likes,comments,shares,saved',
+    'reach,total_interactions',
+    'impressions,reach,engagement,saved'
+  ];
+  let combined = {data: []};
+  const seen = new Set();
+  let lastError = null;
+  for (const metric of metricSets) {
+    try {
+      const res = await igRequest(`${mediaId}/insights`, {params: {metric}, accessToken});
+      for (const item of res.data || []) {
+        if (!seen.has(item.name)) {
+          seen.add(item.name);
+          combined.data.push(item);
+        }
+      }
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  if (!combined.data.length && lastError) throw lastError;
+  return combined;
+}
+
+async function getInstagramPlatformReport({accountId, accountMeta, secrets, from = '', to = '', limit = 50}) {
   const igUserId = accountMeta.igUserId;
   if (!igUserId) throw new Error(`No Instagram Business Account ID saved for "${accountId}"`);
   if (!secrets.instagramAccessToken) throw new Error('INSTAGRAM_ACCESS_TOKEN secret is not configured');
 
   const accessToken = resolveAccessToken(secrets.instagramAccessToken, igUserId);
-  if (!accessToken) {
-    throw new Error(`No usable access token found for "${accountId}" (igUserId ${igUserId}).`);
-  }
+  if (!accessToken) throw new Error(`No usable access token found for "${accountId}" (igUserId ${igUserId}).`);
 
-  const media = await igRequest(`${igUserId}/media`, {
-    params: {fields: 'id,media_type,media_product_type,timestamp,permalink', limit: 1},
+  const mediaRes = await igRequest(`${igUserId}/media`, {
+    params: {
+      fields: 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,media_url,like_count,comments_count',
+      limit: Math.min(Math.max(Number(limit) || 50, 1), 100)
+    },
     accessToken
   });
-  const item = Array.isArray(media.data) ? media.data[0] : null;
-  if (!item?.id) {
-    return {ok: false, accountId, igUserId, reason: 'No media found on this Instagram account.'};
-  }
 
-  const metricSets = [
-    'reach,total_interactions',
-    'reach',
-    'likes,comments,shares,saved'
-  ];
-  let lastError = null;
-  for (const metric of metricSets) {
+  const media = (mediaRes.data || []).filter(item => inDateRange(item.timestamp, from, to));
+  const rows = [];
+  const totals = {
+    views: 0,
+    impressions: 0,
+    likes: 0,
+    comments: 0,
+    saves: 0,
+    shares: 0,
+    publishedContent: media.length,
+    reach: 0,
+    totalInteractions: 0
+  };
+
+  for (const item of media) {
+    let insights = null;
+    let error = null;
     try {
-      const insights = await igRequest(`${item.id}/insights`, {params: {metric}, accessToken});
-      return {
-        ok: true,
-        accountId,
-        igUserId,
-        mediaId: item.id,
-        mediaType: item.media_type || item.media_product_type || null,
-        metrics: Array.isArray(insights.data) ? insights.data.map(m => m.name) : [],
-        sample: insights.data || []
-      };
+      insights = await getMediaInsights(item.id, accessToken);
     } catch (e) {
-      lastError = e;
+      error = e.message || String(e);
     }
+
+    const likes = Number(item.like_count || metricValue(insights, 'likes'));
+    const comments = Number(item.comments_count || metricValue(insights, 'comments'));
+    const shares = metricValue(insights, 'shares');
+    const saves = metricValue(insights, 'saved');
+    const views = metricValue(insights, 'views') || metricValue(insights, 'video_views');
+    const impressions = metricValue(insights, 'impressions');
+    const reach = metricValue(insights, 'reach');
+    const totalInteractions = metricValue(insights, 'total_interactions') || metricValue(insights, 'engagement') || (likes + comments + shares + saves);
+
+    totals.views += views;
+    totals.impressions += impressions;
+    totals.likes += likes;
+    totals.comments += comments;
+    totals.saves += saves;
+    totals.shares += shares;
+    totals.reach += reach;
+    totals.totalInteractions += totalInteractions;
+
+    rows.push({
+      id: item.id,
+      title: item.caption ? String(item.caption).slice(0, 120) : 'Untitled',
+      mediaType: item.media_product_type || item.media_type || '',
+      publishedAt: item.timestamp || null,
+      permalink: item.permalink || '',
+      thumbnailUrl: item.thumbnail_url || item.media_url || '',
+      views,
+      impressions,
+      reach,
+      likes,
+      comments,
+      saves,
+      shares,
+      totalInteractions,
+      error
+    });
   }
 
-  throw new Error(lastError?.message || 'Insights test failed.');
+  rows.sort((a, b) => (b.views || b.totalInteractions || 0) - (a.views || a.totalInteractions || 0));
+  return {ok: true, platform: 'instagram', accountId, igUserId, from, to, totals, rows: rows.slice(0, 10), fetchedContent: media.length};
 }
 
 /**
@@ -248,4 +324,4 @@ async function publishToInstagram({job, accountId, accountMeta, secrets}) {
   return publishContainer({igUserId, containerId, accessToken});
 }
 
-module.exports = {publishToInstagram, testInstagramInsights};
+module.exports = {publishToInstagram, getInstagramPlatformReport};

@@ -54,7 +54,7 @@ const {logger} = require('firebase-functions');
 const {defineSecret} = require('firebase-functions/params');
 const admin = require('firebase-admin');
 
-const {publishToInstagram, testInstagramInsights} = require('./src/instagram');
+const {publishToInstagram, getInstagramPlatformReport} = require('./src/instagram');
 const {publishToYoutube} = require('./src/youtube');
 const {publishToTiktok} = require('./src/tiktok');
 
@@ -307,22 +307,37 @@ exports.processPostingQueueNow = onCall(
   }
 );
 
-exports.testInstagramInsights = onCall(
-  {secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1'},
+exports.getPlatformReport = onCall(
+  {secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1', timeoutSeconds: 120},
   async (request) => {
     await assertAdmin(request);
     const accountId = String(request.data?.accountId || '').trim();
+    const from = String(request.data?.from || '').trim();
+    const to = String(request.data?.to || '').trim();
     if (!accountId) throw new HttpsError('invalid-argument', 'accountId is required.');
-    if (ACCOUNT_PLATFORM[accountId] !== 'instagram') {
-      throw new HttpsError('invalid-argument', 'Insights test is only available for Instagram accounts.');
+
+    const platform = ACCOUNT_PLATFORM[accountId];
+    if (!platform) throw new HttpsError('invalid-argument', 'Unknown platform account.');
+    if (platform !== 'instagram') {
+      return {
+        ok: false,
+        platform,
+        accountId,
+        from,
+        to,
+        reason: `${platform} analytics is not connected yet. Add OAuth/API credentials before live metrics can be pulled.`
+      };
     }
+
     const accountsSnap = await ACCOUNTS_DOC.get();
     const accountsMeta = accountsSnap.exists ? (accountsSnap.data() || {}) : {};
     const accountMeta = accountsMeta[accountId] || {};
     try {
-      return await testInstagramInsights({
+      return await getInstagramPlatformReport({
         accountId,
         accountMeta,
+        from,
+        to,
         secrets: {instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value()}
       });
     } catch (e) {

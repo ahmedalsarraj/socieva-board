@@ -1769,6 +1769,23 @@ function showToastUndo(msg){
 
 // ========== REPORTS ==========
 let reportPeriod = 'all';
+let reportTab = 'board';
+let platformReportAccountId = 'ig_news';
+let platformReportLoading = false;
+let platformReportData = null;
+
+function numFmt(n){
+  return Number(n||0).toLocaleString('en-US');
+}
+
+function reportPeriodLabel(){
+  const {from, to} = getReportRange();
+  if(reportPeriod==='all')return'All time';
+  if(reportPeriod==='today')return'Today';
+  if(reportPeriod==='week')return'This week';
+  if(reportPeriod==='month')return'This month';
+  return (from||'?')+' → '+(to||'?');
+}
 
 function getReportRange() {
   const now = new Date();
@@ -1862,14 +1879,9 @@ function computeReport() {
   return {total, from, to, scopeCards, byStage, byFormat, byCategory, byPresenter, byAssign, byEditor, byPriority, byCompliance, dueItems, withThumb, withVid, withVidLabel};
 }
 
-function renderReport() {
+function renderBoardReport() {
   const r = computeReport();
-  const {from, to} = getReportRange();
-  const periodLabel = reportPeriod === 'all' ? 'All time' :
-    reportPeriod === 'today' ? 'Today' :
-    reportPeriod === 'week'  ? 'This week' :
-    reportPeriod === 'month' ? 'This month' :
-    (from||'?') + ' → ' + (to||'?');
+  const periodLabel = reportPeriodLabel();
   const tot = r.total || 1;
 
   document.getElementById('reportsBody').innerHTML = `
@@ -1902,13 +1914,152 @@ function renderReport() {
     </div>`;
 }
 
+function setupReportsHeader(){
+  const isAdmin=canManageSettings();
+  const platformTab=document.getElementById('platformReportTabBtn');
+  const platformSelect=document.getElementById('platformReportAccount');
+  platformTab.style.display=isAdmin?'':'none';
+  if(!isAdmin&&reportTab==='platforms')reportTab='board';
+  document.querySelectorAll('.report-tab').forEach(btn=>{
+    btn.classList.toggle('active',btn.dataset.reportTab===reportTab);
+  });
+  platformSelect.style.display=reportTab==='platforms'&&isAdmin?'':'none';
+  platformSelect.innerHTML=POSTING_ACCOUNTS.map(a=>`<option value="${escHtml(a.id)}">${escHtml(a.label)}</option>`).join('');
+  platformSelect.value=platformReportAccountId;
+}
+
+function renderMetricCard(icon,label,value){
+  return`<div class="platform-metric-card">
+    <div class="platform-metric-icon">${icon}</div>
+    <div class="platform-metric-value">${numFmt(value)}</div>
+    <div class="platform-metric-label">${escHtml(label)}</div>
+  </div>`;
+}
+
+function renderPlatformReportSkeleton(message='Loading platform report...'){
+  document.getElementById('reportsBody').innerHTML=`<div class="platform-report-empty">${escHtml(message)}</div>`;
+}
+
+function renderPlatformReport(){
+  const account=POSTING_ACCOUNTS.find(a=>a.id===platformReportAccountId)||POSTING_ACCOUNTS[0];
+  if(platformReportLoading){
+    renderPlatformReportSkeleton('Loading platform analytics...');
+    return;
+  }
+  if(!platformReportData){
+    renderPlatformReportSkeleton('Choose a platform account to load analytics.');
+    return;
+  }
+  if(!platformReportData.ok){
+    document.getElementById('reportsBody').innerHTML=`
+      <div class="report-period-note">
+        <span style="color:var(--text2);font-weight:500">${escHtml(account.label)}</span>
+        &nbsp;·&nbsp; Period: <strong style="color:var(--text)">${escHtml(reportPeriodLabel())}</strong>
+      </div>
+      <div class="platform-report-empty">${escHtml(platformReportData.reason||'This platform is not connected yet.')}</div>`;
+    return;
+  }
+
+  const totals=platformReportData.totals||{};
+  const rows=Array.isArray(platformReportData.rows)?platformReportData.rows:[];
+  document.getElementById('reportsBody').innerHTML=`
+    <div class="report-period-note">
+      <span style="color:var(--text2);font-weight:500">${escHtml(account.label)}</span>
+      &nbsp;·&nbsp; Period: <strong style="color:var(--text)">${escHtml(reportPeriodLabel())}</strong>
+      &nbsp;·&nbsp; Source: ${escHtml(account.platform)} API
+    </div>
+
+    <div class="report-section-title">Overview</div>
+    <div class="platform-overview-grid">
+      ${renderMetricCard('V','Views',totals.views)}
+      ${renderMetricCard('IM','Impressions',totals.impressions)}
+      ${renderMetricCard('L','Likes',totals.likes)}
+      ${renderMetricCard('C','Comments',totals.comments)}
+      ${renderMetricCard('SV','Saves',totals.saves)}
+      ${renderMetricCard('SH','Shares',totals.shares)}
+      ${renderMetricCard('P','Published content',totals.publishedContent)}
+      ${renderMetricCard('E','Engagement',totals.totalInteractions)}
+    </div>
+
+    <div class="report-section-title">Top 10 Content</div>
+    ${rows.length?`<div class="report-table-wrap">
+      <table class="report-table">
+        <thead><tr>
+          <th>#</th><th>Content</th><th>Type</th><th>Published</th><th>Views</th><th>Impressions</th><th>Likes</th><th>Comments</th><th>Saves</th><th>Shares</th><th>Engagement</th><th>Link</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map((row,i)=>`<tr>
+            <td>${i+1}</td>
+            <td class="platform-content-cell" title="${escHtml(row.title||'Untitled')}">${escHtml(row.title||'Untitled')}${row.error?`<div style="color:#f87171;font-size:10px;margin-top:3px">${escHtml(row.error)}</div>`:''}</td>
+            <td>${escHtml(row.mediaType||'-')}</td>
+            <td>${escHtml(row.publishedAt?localDateKey(row.publishedAt):'-')}</td>
+            <td>${numFmt(row.views)}</td>
+            <td>${numFmt(row.impressions)}</td>
+            <td>${numFmt(row.likes)}</td>
+            <td>${numFmt(row.comments)}</td>
+            <td>${numFmt(row.saves)}</td>
+            <td>${numFmt(row.shares)}</td>
+            <td>${numFmt(row.totalInteractions)}</td>
+            <td>${row.permalink?`<a href="${escHtml(row.permalink)}" target="_blank" rel="noopener">Open</a>`:'-'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`:'<div class="platform-report-empty">No published content found in this period.</div>'}`;
+}
+
+async function loadPlatformReport(){
+  if(reportTab!=='platforms')return;
+  if(!firebaseFunctions){
+    platformReportData={ok:false,reason:'Firebase Functions SDK is not loaded. Refresh and retry.'};
+    renderPlatformReport();
+    return;
+  }
+  const {from,to}=getReportRange();
+  platformReportLoading=true;
+  platformReportData=null;
+  renderPlatformReport();
+  try{
+    const fn=firebaseFunctions.httpsCallable('getPlatformReport');
+    const res=await fn({accountId:platformReportAccountId,from,to});
+    platformReportData=res.data||{ok:false,reason:'No report data returned.'};
+  }catch(e){
+    platformReportData={ok:false,reason:e?.message||String(e)};
+  }finally{
+    platformReportLoading=false;
+    renderPlatformReport();
+  }
+}
+
+function renderReport(){
+  setupReportsHeader();
+  if(reportTab==='platforms'){
+    renderPlatformReport();
+    if(!platformReportLoading&&!platformReportData)loadPlatformReport();
+    return;
+  }
+  renderBoardReport();
+}
+
 function openReports() {
   document.getElementById('reportsOverlay').classList.add('open');
+  setupReportsHeader();
   renderReport();
 }
 function closeReports() { document.getElementById('reportsOverlay').classList.remove('open'); }
 
 function exportCSV() {
+  if(reportTab==='platforms'){
+    const rows=Array.isArray(platformReportData?.rows)?platformReportData.rows:[];
+    const headers=['Rank','Content','Type','Published','Views','Impressions','Likes','Comments','Saves','Shares','Engagement','Permalink'];
+    const csvRows=rows.map((row,i)=>[
+      i+1,row.title,row.mediaType,row.publishedAt?localDateKey(row.publishedAt):'',row.views,row.impressions,row.likes,row.comments,row.saves,row.shares,row.totalInteractions,row.permalink
+    ].map(v=>`"${String(v||'').replace(/"/g,'""')}"`));
+    const csv=[headers.map(h=>`"${h}"`),...csvRows].map(r=>r.join(',')).join('\n');
+    const url=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));
+    const a=document.createElement('a');a.href=url;a.download='socieva-platform-report.csv';a.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
   const r = computeReport();
   const headers = ['Name','Format','Category','Stage','Presenter','Assigned','Editor','Priority','Post Date','Due Date','Channel','Segment','Compliance','Approved By','Has Thumbnail',boardMode==='carousels'?'Has Images':'Has Video','Has Script','SEO Title','SEO Description','Notes'];
   const rows = r.scopeCards.map(c => [
@@ -2069,49 +2220,14 @@ function renderPostingAccountsBar(){
   document.getElementById('postingAccountsBar').innerHTML=POSTING_ACCOUNTS.map(a=>{
     const connected=postingAccountConnected(a);
     const manageable=POSTING_SHOW_CONNECT_UI&&a.platform==='instagram'&&canManageSettings();
-    const testable=connected&&a.platform==='instagram'&&canManageSettings();
     return`<span class="posting-account-chip ${connected?'connected':'disconnected'}" title="${escHtml(a.handle)}${connected?'':' — not connected'}">
       <span class="dot"></span>${escHtml(a.label)}
       ${manageable?`<button type="button" class="posting-account-manage" data-id="${escHtml(a.id)}">${connected?'Manage':'Connect'}</button>`:''}
-      ${testable?`<button type="button" class="posting-account-test" data-id="${escHtml(a.id)}">Test insights</button>`:''}
     </span>`;
   }).join('');
   document.querySelectorAll('#postingAccountsBar .posting-account-manage').forEach(btn=>{
     btn.addEventListener('click',e=>{e.stopPropagation();openConnectInstagram(btn.dataset.id);});
   });
-  document.querySelectorAll('#postingAccountsBar .posting-account-test').forEach(btn=>{
-    btn.addEventListener('click',e=>{e.stopPropagation();testPostingInsights(btn.dataset.id,btn);});
-  });
-}
-
-async function testPostingInsights(accountId,btn){
-  const account=POSTING_ACCOUNTS.find(a=>a.id===accountId);
-  if(!account)return;
-  if(!firebaseFunctions){
-    showToast('Firebase Functions SDK is not loaded. Refresh and retry.','error');
-    return;
-  }
-  const original=btn.textContent;
-  btn.disabled=true;
-  btn.textContent='Testing...';
-  try{
-    const fn=firebaseFunctions.httpsCallable('testInstagramInsights');
-    const res=await fn({accountId});
-    const data=res.data||{};
-    if(data.ok){
-      const metrics=Array.isArray(data.metrics)&&data.metrics.length?data.metrics.join(', '):'insights';
-      showToast(`${account.label}: Insights OK (${metrics})`,'success');
-      btn.textContent='OK';
-      setTimeout(()=>{btn.textContent=original;btn.disabled=false;},1800);
-      return;
-    }
-    showToast(`${account.label}: ${data.reason||'Insights test did not return data.'}`,'error');
-  }catch(e){
-    const msg=e?.message||String(e);
-    showToast(`${account.label}: ${msg}`,'error');
-  }
-  btn.textContent=original;
-  btn.disabled=false;
 }
 
 function renderPostingReadyGrid(){
@@ -2593,17 +2709,30 @@ document.getElementById('openPostingBtn').addEventListener('click', openPosting)
 document.getElementById('closePostingBtn').addEventListener('click', closePosting);
 document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
 document.getElementById('printReportBtn').addEventListener('click', () => window.print());
+document.querySelectorAll('.report-tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    reportTab=btn.dataset.reportTab;
+    if(reportTab==='platforms')platformReportData=null;
+    renderReport();
+  });
+});
+document.getElementById('platformReportAccount').addEventListener('change',e=>{
+  platformReportAccountId=e.target.value;
+  platformReportData=null;
+  renderReport();
+});
 document.querySelectorAll('.period-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     reportPeriod = btn.dataset.period;
     document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('reportCustomDates').style.display = reportPeriod === 'custom' ? 'flex' : 'none';
+    if(reportTab==='platforms')platformReportData=null;
     renderReport();
   });
 });
-document.getElementById('reportFromDate').addEventListener('change', renderReport);
-document.getElementById('reportToDate').addEventListener('change', renderReport);
+document.getElementById('reportFromDate').addEventListener('change',()=>{if(reportTab==='platforms')platformReportData=null;renderReport();});
+document.getElementById('reportToDate').addEventListener('change',()=>{if(reportTab==='platforms')platformReportData=null;renderReport();});
 
 document.getElementById('lightboxClose').addEventListener('click',closeLightbox);
 document.getElementById('lightbox').addEventListener('click',function(e){if(e.target===this)closeLightbox();});
