@@ -175,6 +175,12 @@ function sumMetricValues(insights, name) {
   return item.values.reduce((sum, entry) => sum + Number(entry.value || 0), 0);
 }
 
+function insightMetric(insights, name) {
+  const direct = metricValue(insights, name);
+  if (direct != null) return direct;
+  return sumMetricValues(insights, name);
+}
+
 function metricNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -402,15 +408,15 @@ async function getInstagramPlatformReport({accountId, accountMeta, secrets, from
       error = e.message || String(e);
     }
 
-    const likes = Number(item.like_count ?? metricValue(insights, 'likes') ?? 0);
-    const comments = Number(item.comments_count ?? metricValue(insights, 'comments') ?? 0);
-    const shares = metricValue(insights, 'shares') ?? 0;
-    const saves = metricValue(insights, 'saved') ?? metricValue(insights, 'saves') ?? 0;
-    const views = metricValue(insights, 'views') ?? metricValue(insights, 'video_views') ?? 0;
-    const directImpressions = metricValue(insights, 'impressions');
-    const reach = metricValue(insights, 'reach');
+    const likes = Number(item.like_count ?? insightMetric(insights, 'likes') ?? 0);
+    const comments = Number(item.comments_count ?? insightMetric(insights, 'comments') ?? 0);
+    const shares = insightMetric(insights, 'shares') ?? 0;
+    const saves = insightMetric(insights, 'saved') ?? insightMetric(insights, 'saves') ?? 0;
+    const views = insightMetric(insights, 'views') ?? insightMetric(insights, 'plays') ?? insightMetric(insights, 'video_views') ?? 0;
+    const directImpressions = insightMetric(insights, 'impressions');
+    const reach = insightMetric(insights, 'reach');
     const impressionCalc = calculatedImpressions({views, impressions: directImpressions, reach});
-    const totalInteractions = metricValue(insights, 'total_interactions') ?? metricValue(insights, 'engagement') ?? (likes + comments + shares + saves);
+    const totalInteractions = insightMetric(insights, 'total_interactions') ?? insightMetric(insights, 'engagement') ?? (likes + comments + shares + saves);
 
     return {
       id: item.id,

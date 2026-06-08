@@ -2056,7 +2056,7 @@ function renderPlatformReport(){
   const rows=Array.isArray(platformReportData.rows)?platformReportData.rows:[];
   const topMode=platformReportData.contentType||platformTopContentMode||'all';
   const impressionsNote=totals.impressionsSource==='calculated_from_views_reach'
-    ? 'Impressions are calculated from Views and Reach because Meta no longer returns Instagram impressions for this endpoint.'
+    ? 'Instagram API does not return a separate impressions metric here. This value is a Views proxy calculated within the selected period.'
     : (totals.impressionsSource==='meta_insights'?'Impressions source: Meta insights.':'Impressions are unavailable for this selection.');
   document.getElementById('reportsBody').innerHTML=`
     <div class="report-period-note">
@@ -2069,7 +2069,7 @@ function renderPlatformReport(){
     <div class="platform-report-layout">
       <div class="platform-overview-grid">
         ${renderMetricCard('Views','Views',totals.views)}
-        ${renderMetricCard('Impressions','Impressions',totals.impressions)}
+        ${renderMetricCard('Proxy','Impressions / views proxy',totals.impressions)}
         ${renderMetricCard('Reach','Reach',totals.reach)}
         ${renderMetricCard('Frequency','Frequency',totals.frequency!=null?Number(totals.frequency).toFixed(2):null)}
         ${renderMetricCard('Engagement','Engagement',totals.totalInteractions)}
@@ -2099,7 +2099,7 @@ function renderPlatformReport(){
     ${platformTopContentLoading?'<div class="platform-report-empty">Loading top content...</div>':(platformReportData.topContentLoaded&&rows.length?`<div class="report-table-wrap">
       <table class="report-table">
         <thead><tr>
-          <th>#</th><th>Content</th><th>Type</th><th>Published</th><th>Views</th><th>Impressions</th><th>Likes</th><th>Comments</th><th>Saves</th><th>Shares</th><th>Engagement</th><th>Link</th>
+          <th>#</th><th>Content</th><th>Type</th><th>Published</th><th>Views</th><th>Impressions / proxy</th><th>Likes</th><th>Comments</th><th>Saves</th><th>Shares</th><th>Engagement</th><th>Link</th>
         </tr></thead>
         <tbody>
           ${rows.map((row,i)=>`<tr>
