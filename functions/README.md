@@ -24,8 +24,13 @@ cd functions
 npm install
 
 # Store the Instagram token as a secret — never in code, .env, or Firestore.
-# A single shared long-lived token (instagram_basic + instagram_content_publish)
-# is enough as long as it covers both connected IG business accounts.
+# Two shapes are accepted (auto-detected in src/instagram.js):
+#   - one shared long-lived token string (needs instagram_basic +
+#     instagram_content_publish across every connected account), or
+#   - a per-account JSON map: {"<igUserId>":"<token>", "<igUserId2>":"<token2>"}
+#     (the normal case when your account manager hands out page-scoped tokens
+#     that only work for their own IG Business Account)
+# Paste whichever shape you were given, exactly as-is, when prompted.
 firebase functions:secrets:set INSTAGRAM_ACCESS_TOKEN
 ```
 

@@ -31,11 +31,14 @@
  *
  *      firebase functions:secrets:set INSTAGRAM_ACCESS_TOKEN
  *
- *    (Paste the long-lived token when prompted. One shared token is fine if
- *    it already has instagram_basic + instagram_content_publish permissions
- *    across both connected IG business accounts — see the chat discussion
- *    that led to this file for why a single shared token was chosen over a
- *    per-account map.)
+ *    Two shapes are accepted (src/instagram.js auto-detects which one you used):
+ *      - A single shared token string (e.g. "IGAAS0o..."), if it already has
+ *        instagram_basic + instagram_content_publish permissions across every
+ *        connected IG business account, OR
+ *      - A per-account JSON map  {"<igUserId>": "<token for that account>", ...}
+ *        — needed when each account has its own page-scoped token (the usual
+ *        case when an account/business manager hands you Page Access Tokens).
+ *    Paste whichever shape you have, exactly as given, when prompted.
  *
  * 3. Deploy:
  *      firebase deploy --only functions

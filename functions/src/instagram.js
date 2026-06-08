@@ -1,11 +1,19 @@
 /**
  * Instagram Graph API publisher.
  *
- * Token model: ONE shared long-lived access token (instagram_basic +
- * instagram_content_publish) covers every connected IG business account —
- * decided in chat after confirming the same Business Manager / app owns both
- * `ig_news` and `ig_arabic`. The token lives only in the INSTAGRAM_ACCESS_TOKEN
- * secret (see ../index.js) and is passed in via `secrets.instagramAccessToken`.
+ * Token model: the INSTAGRAM_ACCESS_TOKEN secret accepts EITHER shape —
+ *   1. A single shared long-lived token string (e.g. "IGAAS0o..." / "EAA...")
+ *      — works if that token has instagram_basic + instagram_content_publish
+ *      permissions across every connected IG business account.
+ *   2. A per-account JSON map  {"<igUserId>": "<token for that account>", ...}
+ *      — needed when the platform/account manager hands out a separate
+ *      page-scoped token per Instagram Business Account (the common case —
+ *      Page Access Tokens from /me/accounts are scoped to their own Page/IG
+ *      account and won't work for a different one).
+ *
+ * resolveAccessToken() below detects which shape was provided and looks up
+ * the right token for the account being published to (by its igUserId). The
+ * raw secret never touches Firestore or the browser — see ../index.js.
  *
  * Job shape (from board/postingQueue, written by confirmPostingCompose in app.js):
  *   {
@@ -29,6 +37,32 @@
 const GRAPH_API = 'https://graph.facebook.com/v19.0';
 const CONTAINER_POLL_INTERVAL_MS = 5000;
 const CONTAINER_POLL_MAX_ATTEMPTS = 24; // ~2 minutes
+
+/**
+ * Pick the right access token for a given Instagram Business Account out of
+ * whatever shape the INSTAGRAM_ACCESS_TOKEN secret was stored in.
+ *
+ *  - If the secret looks like a JSON object, treat it as a per-account map
+ *    keyed by igUserId and return the entry for THIS account (or null if
+ *    that account isn't in the map — a clear, actionable error beats a
+ *    confusing "Cannot parse access token" from the Graph API).
+ *  - Otherwise treat the whole (trimmed) string as one shared token.
+ */
+function resolveAccessToken(rawSecret, igUserId) {
+  if (!rawSecret) return null;
+  const trimmed = String(rawSecret).trim();
+  if (trimmed.startsWith('{')) {
+    let map;
+    try {
+      map = JSON.parse(trimmed);
+    } catch (e) {
+      throw new Error('INSTAGRAM_ACCESS_TOKEN looks like JSON but failed to parse — check it was pasted as a single valid JSON object with no extra quoting.');
+    }
+    if (!map || typeof map !== 'object') return null;
+    return map[igUserId] || null;
+  }
+  return trimmed || null;
+}
 
 async function igRequest(path, {method = 'GET', params = {}, accessToken}) {
   const url = new URL(`${GRAPH_API}/${path}`);
@@ -116,10 +150,18 @@ async function publishContainer({igUserId, containerId, accessToken}) {
  * @throws on any failure — index.js records job.error from the message
  */
 async function publishToInstagram({job, accountId, accountMeta, secrets}) {
-  const accessToken = secrets.instagramAccessToken;
   const igUserId = accountMeta.igUserId;
-  if (!accessToken) throw new Error('INSTAGRAM_ACCESS_TOKEN secret is not configured');
   if (!igUserId) throw new Error(`No Instagram Business Account ID saved for "${accountId}" — connect it from the Posting overlay first`);
+  if (!secrets.instagramAccessToken) throw new Error('INSTAGRAM_ACCESS_TOKEN secret is not configured');
+
+  const accessToken = resolveAccessToken(secrets.instagramAccessToken, igUserId);
+  if (!accessToken) {
+    throw new Error(
+      `No usable access token found for "${accountId}" (igUserId ${igUserId}). ` +
+      `INSTAGRAM_ACCESS_TOKEN must be either a single shared token string, or a JSON map ` +
+      `like {"${igUserId}":"<token for this account>"} that includes this account's id.`
+    );
+  }
 
   const card = job.card || {};
   const caption = job.caption || '';
