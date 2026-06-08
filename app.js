@@ -2838,6 +2838,14 @@ document.getElementById('deleteBtn').addEventListener('click',async()=>{
     // and bring the card back before the delete even reached Firestore.
     try{
       await saveData();
+      // Discard any snapshot that arrived during the 5-second undo window.
+      // Those snapshots were captured BEFORE the delete reached Firestore, so
+      // they still include the deleted card. Flushing one of them now would
+      // bring the card back. Clearing it here is safe: saveData() already
+      // wrote the correct state to Firestore, setCardBaselines() updated the
+      // local baselines, and the Firestore listener will fire a fresh post-
+      // commit snapshot shortly (which won't include the deleted card).
+      pendingSnapshotPayload=null;
       await deleteStorageItems(cardFileItemIds(cardToDelete));
     }catch(e){
       cards.splice(Math.min(originalIndex,cards.length),0,cardToDelete);
