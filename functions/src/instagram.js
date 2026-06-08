@@ -131,10 +131,15 @@ async function createImageContainer({igUserId, imageUrl, caption, accessToken, i
   return res.id;
 }
 
-async function createVideoContainer({igUserId, videoUrl, caption, accessToken, isCarouselItem}) {
+async function createVideoContainer({igUserId, videoUrl, caption, coverUrl, accessToken, isCarouselItem}) {
   const params = {video_url: videoUrl, media_type: isCarouselItem ? undefined : 'REELS'};
   if (isCarouselItem) params.is_carousel_item = 'true';
-  else if (caption) params.caption = caption;
+  else {
+    if (caption) params.caption = caption;
+    // cover_url sets the Reel's thumbnail/cover image — only supported for
+    // non-carousel Reels and only when a thumbnail was actually uploaded.
+    if (coverUrl) params.cover_url = coverUrl;
+  }
   Object.keys(params).forEach(k => params[k] === undefined && delete params[k]);
   const res = await igRequest(`${igUserId}/media`, {method: 'POST', params, accessToken});
   await waitForContainer(res.id, accessToken);
@@ -420,7 +425,12 @@ async function publishToInstagram({job, accountId, accountMeta, secrets}) {
   } else if (card._kind === 'video' || card.vidUrl || card.vidDisplayUrl) {
     const videoUrl = await refreshMediaUrl(card, 'video');
     if (!videoUrl) throw new Error('No video URL found on this card');
-    containerId = await createVideoContainer({igUserId, videoUrl, caption, accessToken, isCarouselItem: false});
+    // Use the card's thumbnail as the Reel cover if one was uploaded — the
+    // Graph API accepts any publicly reachable HTTPS URL for cover_url, and
+    // Firebase Storage download URLs (with their token) qualify. If there's
+    // no thumbnail on this card we just omit it and Instagram picks a frame.
+    const coverUrl = await refreshMediaUrl(card, 'thumb');
+    containerId = await createVideoContainer({igUserId, videoUrl, caption, coverUrl: coverUrl || undefined, accessToken, isCarouselItem: false});
   } else {
     const imageUrl = await refreshMediaUrl(card, 'thumb');
     if (!imageUrl) throw new Error('No image URL found on this card');
