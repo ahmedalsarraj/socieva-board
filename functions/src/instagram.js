@@ -34,7 +34,8 @@
  * see refreshMediaUrl() below, which is stubbed to the obvious approach.
  */
 
-const GRAPH_API = 'https://graph.facebook.com/v19.0';
+const FACEBOOK_GRAPH_API = 'https://graph.facebook.com/v19.0';
+const INSTAGRAM_GRAPH_API = 'https://graph.instagram.com/v21.0';
 const CONTAINER_POLL_INTERVAL_MS = 5000;
 const CONTAINER_POLL_MAX_ATTEMPTS = 24; // ~2 minutes
 
@@ -48,6 +49,14 @@ const CONTAINER_POLL_MAX_ATTEMPTS = 24; // ~2 minutes
  *    confusing "Cannot parse access token" from the Graph API).
  *  - Otherwise treat the whole (trimmed) string as one shared token.
  */
+function cleanAccessToken(token) {
+  return String(token || '')
+    .trim()
+    .replace(/^Bearer\s+/i, '')
+    .replace(/^['"]|['"]$/g, '')
+    .trim();
+}
+
 function resolveAccessToken(rawSecret, igUserId) {
   if (!rawSecret) return null;
   const trimmed = String(rawSecret).trim();
@@ -59,13 +68,17 @@ function resolveAccessToken(rawSecret, igUserId) {
       throw new Error('INSTAGRAM_ACCESS_TOKEN looks like JSON but failed to parse — check it was pasted as a single valid JSON object with no extra quoting.');
     }
     if (!map || typeof map !== 'object') return null;
-    return map[igUserId] || null;
+    return cleanAccessToken(map[igUserId]);
   }
-  return trimmed || null;
+  return cleanAccessToken(trimmed) || null;
+}
+
+function graphBaseForToken(accessToken) {
+  return /^IGA/i.test(accessToken) ? INSTAGRAM_GRAPH_API : FACEBOOK_GRAPH_API;
 }
 
 async function igRequest(path, {method = 'GET', params = {}, accessToken}) {
-  const url = new URL(`${GRAPH_API}/${path}`);
+  const url = new URL(`${graphBaseForToken(accessToken)}/${path}`);
   const isGet = method === 'GET';
   const body = new URLSearchParams({...params, access_token: accessToken});
   if (isGet) {
