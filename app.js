@@ -1869,6 +1869,7 @@ function renderPostingReadyGrid(){
 
 function postingStatusLabel(item){
   if(item.status==='published')return'Published';
+  if(item.status==='partial')return'Partially published';
   if(item.status==='failed')return'Failed';
   if(item.status==='publishing')return'Publishing…';
   if(item.status==='queued')return'Queued';
@@ -1890,7 +1891,7 @@ function renderPostingQueue(){
     const when=item.mode==='schedule'&&item.scheduledAt
       ?('Scheduled for '+new Date(item.scheduledAt).toLocaleString())
       :(item.publishedAt?('Published '+new Date(item.publishedAt).toLocaleString()):'Publish now');
-    const statusCls=item.status==='published'?'published':item.status==='failed'?'failed':item.status==='publishing'?'publishing':'scheduled';
+    const statusCls=item.status==='published'?'published':item.status==='partial'?'partial':item.status==='failed'?'failed':item.status==='publishing'?'publishing':'scheduled';
     const ytLine=item.youtube&&item.destinations.includes('youtube')
       ?`<div class="posting-queue-sub" style="margin-top:2px"><span style="color:var(--text3)">YouTube:</span> <span>${escHtml(item.youtube.title||'Untitled')}</span>${item.youtube.tags&&item.youtube.tags.length?`<span style="color:var(--text3)"> · tags: ${escHtml(item.youtube.tags.join(', '))}</span>`:''}</div>`
       :'';
