@@ -64,7 +64,6 @@ let firebaseAuth = null;
 let firebaseDb = null;
 let firebaseStorage = null;
 let firebaseFunctions = null;
-let firebasePersistenceRequested = false;
 let boardSnapshotUnsub = null;
 let boardSnapshotMode = null;
 let pendingSnapshotPayload = null;
@@ -125,10 +124,6 @@ function initFirebaseBackend(){
   firebaseDb=firebase.firestore();
   firebaseStorage=firebase.storage();
   firebaseFunctions=typeof firebase.functions === 'function' ? firebase.app().functions('us-central1') : null;
-  if(!firebasePersistenceRequested){
-    firebasePersistenceRequested=true;
-    firebaseDb.enablePersistence?.({synchronizeTabs:true}).catch(()=>{});
-  }
 }
 
 function firebaseBoardDoc(){return boardMode==='carousels'?'carousels':'videos'}
@@ -1535,8 +1530,7 @@ function openEdit(id){
     thumbItemId=c.thumbItemId||null;thumbDisplayUrl=c.thumbDisplayUrl||c.thumbUrl||null;
     document.getElementById('thumbStatus').textContent='File uploaded ✓';
     document.getElementById('thumbLabel').textContent='Change image';
-    const tv=safeUrl(c.thumbUrl);
-    document.getElementById('thumbLink').innerHTML=tv?`<a href="${escHtml(tv)}" target="_blank" style="color:#3b82f6">View in Firebase →</a>`:'';
+    document.getElementById('thumbLink').innerHTML='';
     document.getElementById('thumbActions').style.display='flex';
     setPreview('thumb',thumbDisplayUrl,c.name);
   }
@@ -1544,8 +1538,7 @@ function openEdit(id){
     vidItemId=c.vidItemId||null;vidDisplayUrl=c.vidDisplayUrl||c.vidUrl||null;
     document.getElementById('vidStatus').textContent='File uploaded ✓';
     document.getElementById('vidLabel').textContent='Change video';
-    const vv=safeUrl(c.vidUrl);
-    document.getElementById('vidLink').innerHTML=vv?`<a href="${escHtml(vv)}" target="_blank" style="color:#3b82f6">View in Firebase →</a>`:'';
+    document.getElementById('vidLink').innerHTML='';
     document.getElementById('vidActions').style.display='flex';
     setPreview('vid',vidDisplayUrl,c.name);
   }
@@ -1592,8 +1585,7 @@ async function handleUpload(file,type){
       vidFileUrl=result.shareUrl;vidItemId=result.itemId;vidDisplayUrl=result.downloadUrl;
     }
     setPlainStatus(statusEl,'Uploaded ✓');
-    const rl=safeUrl(result.shareUrl);
-    linkEl.innerHTML=rl?`<a href="${escHtml(rl)}" target="_blank" style="color:#3b82f6">View in Firebase →</a>`:'';
+    linkEl.innerHTML='';
     document.getElementById(type+'Actions').style.display='flex';
     setPreview(type,type==='thumb'?thumbDisplayUrl:vidDisplayUrl,document.getElementById('fName').value||'');
     showToast(`File uploaded to Firebase`,'success');
@@ -1622,10 +1614,26 @@ async function downloadUpload(type){
   setActionButtonsDisabled(type+'Actions',true);
   setTransferStatus(statusEl,'Downloading',0);
   try{
-    const blob=await fetchBlobWithProgress(url,pct=>{
-      if(transferGen!==gen)return;
-      setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
-    });
+    let blob;
+    try{
+      blob=await fetchBlobWithProgress(url,pct=>{
+        if(transferGen!==gen)return;
+        setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
+      });
+    }catch(e){
+      // Mobile connections drop mid-stream often enough that a single retry
+      // with a freshly-minted URL clears most "Failed to fetch" failures.
+      if(transferGen!==gen)throw e;
+      if(itemId){
+        setTransferStatus(statusEl,'Connection dropped, retrying…',0);
+        url=await firebaseRefreshDownloadUrl(itemId);
+        if(type==='thumb') thumbDisplayUrl=url; else vidDisplayUrl=url;
+      }
+      blob=await fetchBlobWithProgress(url,pct=>{
+        if(transferGen!==gen)return;
+        setTransferStatus(statusEl,'Downloading',typeof pct==='number'?pct:null);
+      });
+    }
     if(transferGen!==gen)return;
     triggerBlobDownload(blob,name+'-'+(type==='thumb'?'thumbnail':'video')+ext);
     setPlainStatus(statusEl,'Download started ✓');
@@ -1635,7 +1643,10 @@ async function downloadUpload(type){
     },1800);
   }catch(e){
     if(transferGen===gen){
-      setPlainStatus(statusEl,'Download failed: '+e.message,'error');
+      const msg=/failed to fetch/i.test(e.message||'')
+        ?'Download failed: connection dropped. Check your network and try again.'
+        :'Download failed: '+e.message;
+      setPlainStatus(statusEl,msg,'error');
       showToast('Download failed','error');
     }
   }finally{
@@ -2563,7 +2574,9 @@ async function confirmPostingCompose(){
     await savePostingJob(postingJob);
   }catch(e){
     postingQueue=postingQueue.filter(item=>item.id!==postingJob.id);
-    errEl.textContent='Could not save posting job: '+e.message;
+    errEl.textContent=/already been terminated/i.test(e.message||'')
+      ?'Connection went stale (common after a phone/laptop sleeps for a while). Reload the page and try again.'
+      :'Could not save posting job: '+e.message;
     btn.disabled=false;btn.textContent=originalLabel;
     return;
   }
