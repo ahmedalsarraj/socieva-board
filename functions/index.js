@@ -290,7 +290,7 @@ async function sweepQueue(secrets) {
  * even in the worst case, instead of up to 5 minutes late.
  */
 exports.processPostingQueue = onSchedule(
-  {schedule: 'every 1 minutes', secrets: [INSTAGRAM_ACCESS_TOKEN, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN], region: 'us-central1', timeoutSeconds: 540, memory: '1GiB'},
+  {schedule: 'every 1 minutes', secrets: [INSTAGRAM_ACCESS_TOKEN, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN], region: 'us-central1', timeoutSeconds: 540, memory: '2GiB'},
   async () => {
     await sweepQueue({
       instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value(),
@@ -313,7 +313,7 @@ exports.processPostingQueue = onSchedule(
  * app uses, enforced here server-side (never trust the client's claim).
  */
 exports.processPostingQueueNow = onCall(
-  {secrets: [INSTAGRAM_ACCESS_TOKEN, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN], region: 'us-central1', timeoutSeconds: 540, memory: '1GiB'},
+  {secrets: [INSTAGRAM_ACCESS_TOKEN, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN], region: 'us-central1', timeoutSeconds: 540, memory: '2GiB'},
   async (request) => {
     await assertAdmin(request);
     return sweepQueue({

@@ -66,13 +66,15 @@ async function youtubeVideoUrl(card) {
   return card?.vidDisplayUrl || card?.vidUrl || card?.videoUrl || null;
 }
 
-async function downloadVideoBytes(url) {
+async function openVideoDownload(url) {
   if (!url) throw new Error('This ticket has no video URL to upload to YouTube.');
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Could not download video for YouTube upload (HTTP ${res.status}).`);
   const contentType = res.headers.get('content-type') || 'video/mp4';
-  const arrayBuffer = await res.arrayBuffer();
-  return {buffer: Buffer.from(arrayBuffer), contentType};
+  const contentLength = Number(res.headers.get('content-length') || 0);
+  if (!contentLength) throw new Error('Could not read video file size for YouTube upload.');
+  if (!res.body) throw new Error('Could not open video stream for YouTube upload.');
+  return {body: res.body, contentType, contentLength};
 }
 
 function isShortCard(card) {
@@ -148,15 +150,16 @@ async function startResumableUpload({accessToken, metadata, contentType, content
   return location;
 }
 
-async function uploadVideoBytes({uploadUrl, accessToken, buffer, contentType}) {
+async function uploadVideoStream({uploadUrl, accessToken, body, contentType, contentLength}) {
   const res = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': contentType,
-      'Content-Length': String(buffer.length)
+      'Content-Length': String(contentLength)
     },
-    body: buffer
+    body,
+    duplex: 'half'
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.id) {
@@ -172,14 +175,14 @@ async function publishToYoutube({job, secrets}) {
   }
   const accessToken = await exchangeRefreshToken(secrets);
   const metadata = youtubeMetadata(job);
-  const {buffer, contentType} = await downloadVideoBytes(await youtubeVideoUrl(job.card));
+  const {body, contentType, contentLength} = await openVideoDownload(await youtubeVideoUrl(job.card));
   const uploadUrl = await startResumableUpload({
     accessToken,
     metadata,
     contentType,
-    contentLength: buffer.length
+    contentLength
   });
-  return uploadVideoBytes({uploadUrl, accessToken, buffer, contentType});
+  return uploadVideoStream({uploadUrl, accessToken, body, contentType, contentLength});
 }
 
 module.exports = {publishToYoutube, setYoutubeStorage};
