@@ -75,12 +75,39 @@ async function downloadVideoBytes(url) {
   return {buffer: Buffer.from(arrayBuffer), contentType};
 }
 
+function isShortCard(card) {
+  return String(card?.format || '').trim().toLowerCase() === 'short';
+}
+
+function withShortsHashtag(text) {
+  const value = String(text || '').trim();
+  if (!value) return '#Shorts';
+  return /(^|\s)#shorts(\s|$)/i.test(value) ? value : `${value} #Shorts`;
+}
+
+function uniqueList(items) {
+  const seen = new Set();
+  return items
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+    .filter(item => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function youtubeMetadata(job) {
   const yt = job.youtube || {};
   const card = job.card || {};
-  const title = String(yt.title || card.seoTitle || card.name || 'Untitled').trim().slice(0, 100);
-  const description = String(yt.description || card.seoDesc || job.caption || '').trim();
-  const tags = Array.isArray(yt.tags) ? yt.tags.map(t => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+  const shortUpload = isShortCard(card);
+  const baseTitle = String(yt.title || card.seoTitle || card.name || 'Untitled').trim();
+  const baseDescription = String(yt.description || card.seoDesc || job.caption || '').trim();
+  const title = (shortUpload ? withShortsHashtag(baseTitle) : baseTitle).slice(0, 100);
+  const description = shortUpload ? withShortsHashtag(baseDescription) : baseDescription;
+  const rawTags = Array.isArray(yt.tags) ? yt.tags : [];
+  const tags = uniqueList([...rawTags, ...(shortUpload ? ['Shorts'] : [])]).slice(0, 30);
   if (!title) throw new Error('YouTube title is required.');
   if (!description) throw new Error('YouTube description is required.');
   return {

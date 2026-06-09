@@ -2611,8 +2611,10 @@ function openPostingCompose(c){
   }
   document.getElementById('postingYtTitle').value=(c.seoTitle||c.name||'').trim();
   document.getElementById('postingYtDescription').value=(c.seoDesc||'').trim();
-  document.getElementById('postingYtTags').value='';
-  document.getElementById('postingYtError').textContent='';
+  document.getElementById('postingYtTags').value=String(c.format||'').trim().toLowerCase()==='short'?'Shorts':'';
+  const ytError=document.getElementById('postingYtError');
+  ytError.style.color='';
+  ytError.textContent='';
   updatePostingYoutubeFieldsVisibility();
   document.querySelectorAll('#postingWhenGroup .fp-pill').forEach(p=>p.classList.toggle('active',p.dataset.val==='now'));
   document.getElementById('postingScheduleInputs').style.display='none';
@@ -2673,9 +2675,19 @@ function updatePostingYoutubeFieldsVisibility(){
   const err=document.getElementById('postingYtError');
   if(showYoutube){
     const card=postingComposeCard;
-    err.textContent=(card?._kind==='carousel'||!postingVideoSrc(card))
-      ?'YouTube publishing requires a video ticket with an uploaded video.'
-      :'';
+    if(card?._kind==='carousel'||!postingVideoSrc(card)){
+      err.style.color='';
+      err.textContent='YouTube publishing requires a video ticket with an uploaded video.';
+    }else if(String(card?.format||'').trim().toLowerCase()==='short'){
+      err.style.color='var(--text3)';
+      err.textContent='YouTube classifies Shorts from the uploaded file. Use a vertical or square video that is 3 minutes or less.';
+    }else{
+      err.style.color='';
+      err.textContent='';
+    }
+  }else{
+    err.style.color='';
+    err.textContent='';
   }
 }
 
@@ -2689,6 +2701,7 @@ async function confirmPostingCompose(){
   let youtube=null;
   if(postingDestPlatforms().has('youtube')){
     const ytErrEl=document.getElementById('postingYtError');
+    ytErrEl.style.color='';
     ytErrEl.textContent='';
     if(card?._kind==='carousel'||!postingVideoSrc(card)){ytErrEl.textContent='YouTube publishing requires a video ticket with an uploaded video.';return;}
     const title=document.getElementById('postingYtTitle').value.trim();
