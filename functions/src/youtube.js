@@ -44,7 +44,7 @@ async function exchangeRefreshToken(secrets) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || !json.access_token) {
     const msg = json.error_description || json.error || `OAuth token exchange failed (HTTP ${res.status})`;
-    throw new Error(`YouTube OAuth failed: ${msg}`);
+    throw new Error(`YouTube OAuth failed: ${msg}. Verify YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, and YOUTUBE_REFRESH_TOKEN belong to the same OAuth client.`);
   }
   return json.access_token;
 }

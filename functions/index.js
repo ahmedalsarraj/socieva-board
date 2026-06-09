@@ -271,7 +271,7 @@ async function sweepQueue(secrets) {
       ...result,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, {merge: true});
-    if (result.status === 'published' || result.status === 'partial') {
+    if (result.status === 'published') {
       await markCardPosted(result);
     }
     processed++;
