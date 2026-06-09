@@ -64,6 +64,9 @@ const db = admin.firestore();
 // Declared here so Cloud Functions injects it at runtime without it ever
 // touching source control, Firestore, or the browser.
 const INSTAGRAM_ACCESS_TOKEN = defineSecret('INSTAGRAM_ACCESS_TOKEN');
+const YOUTUBE_CLIENT_ID = defineSecret('YOUTUBE_CLIENT_ID');
+const YOUTUBE_CLIENT_SECRET = defineSecret('YOUTUBE_CLIENT_SECRET');
+const YOUTUBE_REFRESH_TOKEN = defineSecret('YOUTUBE_REFRESH_TOKEN');
 
 const QUEUE_DOC = db.collection('board').doc('postingQueue');
 const QUEUE_ITEMS = QUEUE_DOC.collection('items');
@@ -286,9 +289,14 @@ async function sweepQueue(secrets) {
  * even in the worst case, instead of up to 5 minutes late.
  */
 exports.processPostingQueue = onSchedule(
-  {schedule: 'every 1 minutes', secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1'},
+  {schedule: 'every 1 minutes', secrets: [INSTAGRAM_ACCESS_TOKEN, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN], region: 'us-central1', timeoutSeconds: 540, memory: '1GiB'},
   async () => {
-    await sweepQueue({instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value()});
+    await sweepQueue({
+      instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value(),
+      youtubeClientId: YOUTUBE_CLIENT_ID.value(),
+      youtubeClientSecret: YOUTUBE_CLIENT_SECRET.value(),
+      youtubeRefreshToken: YOUTUBE_REFRESH_TOKEN.value()
+    });
   }
 );
 
@@ -304,10 +312,15 @@ exports.processPostingQueue = onSchedule(
  * app uses, enforced here server-side (never trust the client's claim).
  */
 exports.processPostingQueueNow = onCall(
-  {secrets: [INSTAGRAM_ACCESS_TOKEN], region: 'us-central1'},
+  {secrets: [INSTAGRAM_ACCESS_TOKEN, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN], region: 'us-central1', timeoutSeconds: 540, memory: '1GiB'},
   async (request) => {
     await assertAdmin(request);
-    return sweepQueue({instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value()});
+    return sweepQueue({
+      instagramAccessToken: INSTAGRAM_ACCESS_TOKEN.value(),
+      youtubeClientId: YOUTUBE_CLIENT_ID.value(),
+      youtubeClientSecret: YOUTUBE_CLIENT_SECRET.value(),
+      youtubeRefreshToken: YOUTUBE_REFRESH_TOKEN.value()
+    });
   }
 );
 

@@ -1,38 +1,140 @@
 /**
- * YouTube Data API v3 publisher — STUB.
+ * YouTube Data API v3 publisher.
  *
- * Not implemented yet because YouTube's auth model is fundamentally different
- * from Instagram's: it's per-channel OAuth 2.0 (not a single long-lived app
- * token), so it needs its own secret(s) and a refresh-token flow:
+ * Required Firebase secrets:
+ *   - YOUTUBE_CLIENT_ID
+ *   - YOUTUBE_CLIENT_SECRET
+ *   - YOUTUBE_REFRESH_TOKEN
  *
- *   - YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET (from Google Cloud Console,
- *     same project as Firebase or a dedicated one)
- *   - YOUTUBE_REFRESH_TOKEN (obtained once via an OAuth consent flow for the
- *     "Capital.com Arabic" channel — youtube.upload scope)
- *
- * High-level flow once you're ready to build it:
- *   1. Exchange the refresh token for a short-lived access token:
- *        POST https://oauth2.googleapis.com/token
- *          {client_id, client_secret, refresh_token, grant_type: 'refresh_token'}
- *   2. Resumable upload of the video file:
- *        POST https://www.googleapis.com/upload/youtube/v3/videos
- *             ?uploadType=resumable&part=snippet,status
- *        body: { snippet: {title, description, tags}, status: {privacyStatus} }
- *      then PUT the video bytes to the returned upload URL.
- *   3. The job already carries everything you need in job.youtube:
- *        { title, description, tags: string[] }
- *      (collected by the YouTube-specific fields added to the compose modal —
- *      see #postingYoutubeFields / #postingYtTitle etc. in index.html)
- *
- * For scheduled posts, YouTube supports `status.publishAt` + `privacyStatus:
- * 'private'` so you don't have to hold the upload yourself until job.scheduledAt.
- *
- * @returns {Promise<string>} the published video id
- * @throws Always — until this is implemented, jobs targeting YouTube will be
- *         recorded as failed with this message rather than silently "succeeding".
+ * The refresh token must belong to the target YouTube channel and include:
+ *   https://www.googleapis.com/auth/youtube.upload
  */
-async function publishToYoutube({job, accountId, accountMeta, secrets}) {
-  throw new Error('YouTube publishing is not implemented yet — see functions/src/youtube.js for the planned OAuth + resumable-upload flow');
+
+const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const YOUTUBE_UPLOAD_URL = 'https://www.googleapis.com/upload/youtube/v3/videos';
+
+function cleanSecret(value) {
+  return String(value || '').trim().replace(/^['"]|['"]$/g, '').trim();
+}
+
+async function exchangeRefreshToken(secrets) {
+  const clientId = cleanSecret(secrets.youtubeClientId);
+  const clientSecret = cleanSecret(secrets.youtubeClientSecret);
+  const refreshToken = cleanSecret(secrets.youtubeRefreshToken);
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('YouTube OAuth secrets are not configured. Set YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, and YOUTUBE_REFRESH_TOKEN.');
+  }
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token'
+  });
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    body,
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.access_token) {
+    const msg = json.error_description || json.error || `OAuth token exchange failed (HTTP ${res.status})`;
+    throw new Error(`YouTube OAuth failed: ${msg}`);
+  }
+  return json.access_token;
+}
+
+function youtubeVideoUrl(card) {
+  return card?.vidDisplayUrl || card?.vidUrl || card?.videoUrl || null;
+}
+
+async function downloadVideoBytes(url) {
+  if (!url) throw new Error('This ticket has no video URL to upload to YouTube.');
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not download video for YouTube upload (HTTP ${res.status}).`);
+  const contentType = res.headers.get('content-type') || 'video/mp4';
+  const arrayBuffer = await res.arrayBuffer();
+  return {buffer: Buffer.from(arrayBuffer), contentType};
+}
+
+function youtubeMetadata(job) {
+  const yt = job.youtube || {};
+  const card = job.card || {};
+  const title = String(yt.title || card.seoTitle || card.name || 'Untitled').trim().slice(0, 100);
+  const description = String(yt.description || card.seoDesc || job.caption || '').trim();
+  const tags = Array.isArray(yt.tags) ? yt.tags.map(t => String(t).trim()).filter(Boolean).slice(0, 30) : [];
+  if (!title) throw new Error('YouTube title is required.');
+  if (!description) throw new Error('YouTube description is required.');
+  return {
+    snippet: {
+      title,
+      description,
+      tags,
+      categoryId: '25'
+    },
+    status: {
+      privacyStatus: 'public',
+      selfDeclaredMadeForKids: false
+    }
+  };
+}
+
+async function startResumableUpload({accessToken, metadata, contentType, contentLength}) {
+  const url = new URL(YOUTUBE_UPLOAD_URL);
+  url.searchParams.set('uploadType', 'resumable');
+  url.searchParams.set('part', 'snippet,status');
+
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+      'X-Upload-Content-Type': contentType,
+      'X-Upload-Content-Length': String(contentLength)
+    },
+    body: JSON.stringify(metadata)
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`YouTube upload session failed (HTTP ${res.status}): ${text || res.statusText}`);
+  }
+  const location = res.headers.get('location');
+  if (!location) throw new Error('YouTube upload session did not return an upload URL.');
+  return location;
+}
+
+async function uploadVideoBytes({uploadUrl, accessToken, buffer, contentType}) {
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': contentType,
+      'Content-Length': String(buffer.length)
+    },
+    body: buffer
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.id) {
+    const msg = json.error?.message || JSON.stringify(json) || `HTTP ${res.status}`;
+    throw new Error(`YouTube video upload failed: ${msg}`);
+  }
+  return json.id;
+}
+
+async function publishToYoutube({job, secrets}) {
+  if (job.card?._kind === 'carousel') {
+    throw new Error('YouTube publishing requires a video ticket, not a carousel.');
+  }
+  const accessToken = await exchangeRefreshToken(secrets);
+  const metadata = youtubeMetadata(job);
+  const {buffer, contentType} = await downloadVideoBytes(youtubeVideoUrl(job.card));
+  const uploadUrl = await startResumableUpload({
+    accessToken,
+    metadata,
+    contentType,
+    contentLength: buffer.length
+  });
+  return uploadVideoBytes({uploadUrl, accessToken, buffer, contentType});
 }
 
 module.exports = {publishToYoutube};

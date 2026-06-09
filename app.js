@@ -2271,6 +2271,7 @@ let connectIgAccountId=null;
 
 // A destination is available once an admin has saved its non-secret account metadata.
 function postingAccountConnected(a){
+  if(a.platform==='youtube')return true;
   return!!(postingSocialAccounts[a.id]&&postingSocialAccounts[a.id].connected);
 }
 
@@ -2675,10 +2676,12 @@ async function confirmPostingCompose(){
   const caption=document.getElementById('postingCaption').value.trim();
   if(!caption){errEl.textContent='Please write a caption before publishing.';return;}
   if(!postingSelectedDest.size){errEl.textContent='Select at least one destination.';return;}
+  const card=postingComposeCard;
   let youtube=null;
   if(postingDestPlatforms().has('youtube')){
     const ytErrEl=document.getElementById('postingYtError');
     ytErrEl.textContent='';
+    if(card?._kind==='carousel'||!postingVideoSrc(card)){ytErrEl.textContent='YouTube publishing requires a video ticket with an uploaded video.';return;}
     const title=document.getElementById('postingYtTitle').value.trim();
     const description=document.getElementById('postingYtDescription').value.trim();
     const tags=document.getElementById('postingYtTags').value.split(',').map(t=>t.trim()).filter(Boolean);
@@ -2694,7 +2697,6 @@ async function confirmPostingCompose(){
     scheduledAt=new Date(d+'T'+t).getTime();
     if(!scheduledAt||isNaN(scheduledAt)||scheduledAt<=Date.now()){errEl.textContent='Pick a time in the future.';return;}
   }
-  const card=postingComposeCard;
   const destIds=[...postingSelectedDest];
   let status=postingWhenMode==='schedule'?'scheduled':'queued',publishError=null,publishedAt=null;
   const btn=document.getElementById('postingConfirmBtn');
