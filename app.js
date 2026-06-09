@@ -2660,6 +2660,56 @@ function postingDestPlatforms(){
   return new Set([...postingSelectedDest].map(id=>POSTING_ACCOUNTS.find(a=>a.id===id)?.platform).filter(Boolean));
 }
 
+const postingVideoMetaCache=new Map();
+
+function postingFormatSeconds(seconds){
+  if(!Number.isFinite(seconds))return'unknown duration';
+  const total=Math.max(0,Math.round(seconds));
+  const m=Math.floor(total/60);
+  const s=String(total%60).padStart(2,'0');
+  return `${m}:${s}`;
+}
+
+function loadPostingVideoMetadata(url){
+  if(!url)return Promise.reject(new Error('No video URL'));
+  if(postingVideoMetaCache.has(url))return postingVideoMetaCache.get(url);
+  const promise=new Promise((resolve,reject)=>{
+    const video=document.createElement('video');
+    const cleanup=()=>{
+      video.removeAttribute('src');
+      video.load();
+    };
+    video.preload='metadata';
+    video.muted=true;
+    video.playsInline=true;
+    video.onloadedmetadata=()=>{
+      const meta={width:video.videoWidth||0,height:video.videoHeight||0,duration:video.duration||0};
+      cleanup();
+      resolve(meta);
+    };
+    video.onerror=()=>{
+      cleanup();
+      reject(new Error('Could not read video metadata.'));
+    };
+    video.src=url;
+  }).catch(err=>{
+    postingVideoMetaCache.delete(url);
+    throw err;
+  });
+  postingVideoMetaCache.set(url,promise);
+  return promise;
+}
+
+function youtubeShortEligibilityError(meta){
+  const width=Number(meta?.width)||0;
+  const height=Number(meta?.height)||0;
+  const duration=Number(meta?.duration)||0;
+  if(!width||!height)return'Could not verify this video dimensions for YouTube Shorts.';
+  if(width>height)return`This file is ${width}×${height} landscape, so YouTube will publish it as a regular video. Shorts need a vertical or square file.`;
+  if(Number.isFinite(duration)&&duration>180.5)return`This file is ${postingFormatSeconds(duration)}, so YouTube will publish it as a regular video. Shorts must be 3:00 or less.`;
+  return'';
+}
+
 function postingRequiresSharedCaption(){
   const platforms=postingDestPlatforms();
   return platforms.has('instagram')||platforms.has('tiktok');
@@ -2704,6 +2754,26 @@ async function confirmPostingCompose(){
     ytErrEl.style.color='';
     ytErrEl.textContent='';
     if(card?._kind==='carousel'||!postingVideoSrc(card)){ytErrEl.textContent='YouTube publishing requires a video ticket with an uploaded video.';return;}
+    if(String(card?.format||'').trim().toLowerCase()==='short'){
+      ytErrEl.style.color='var(--text3)';
+      ytErrEl.textContent='Checking YouTube Shorts eligibility...';
+      let meta;
+      try{
+        meta=await loadPostingVideoMetadata(postingVideoSrc(card));
+      }catch(e){
+        ytErrEl.style.color='';
+        ytErrEl.textContent='Could not verify this video for YouTube Shorts. Open the video and confirm it is vertical/square and 3 minutes or less.';
+        return;
+      }
+      const shortErr=youtubeShortEligibilityError(meta);
+      if(shortErr){
+        ytErrEl.style.color='';
+        ytErrEl.textContent=shortErr;
+        return;
+      }
+      ytErrEl.style.color='';
+      ytErrEl.textContent='';
+    }
     const title=document.getElementById('postingYtTitle').value.trim();
     const description=document.getElementById('postingYtDescription').value.trim();
     const tags=document.getElementById('postingYtTags').value.split(',').map(t=>t.trim()).filter(Boolean);
