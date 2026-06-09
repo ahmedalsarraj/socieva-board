@@ -68,6 +68,7 @@ let firebaseFunctions = null;
 let boardSnapshotUnsub = null;
 let boardSnapshotMode = null;
 let pendingSnapshotPayload = null;
+let lastAppliedBoardFingerprint = '';
 let boardRevision = 0;
 let cardBaselineData = new Map();
 let cardBaselineRev = new Map();
@@ -184,6 +185,18 @@ function applyBoardPayload(data,mode=boardMode){
 }
 function cacheFirebaseBoardPayload(mode,payload){
   try{localStorage.setItem(firebaseBoardCacheKey(mode),JSON.stringify({cachedAt:Date.now(),payload}));}catch(e){}
+}
+function boardPayloadFingerprint(mode,payload){
+  return mode+':'+JSON.stringify({
+    revision:Number(payload?.revision||0),
+    settings:mode==='videos'?normalizeSettings(payload?.settings):undefined,
+    cards:(payload?.cards||[]).map(c=>({
+      id:c.id,
+      rev:Number(c._rev||0),
+      sortIndex:Number.isFinite(c.sortIndex)?c.sortIndex:null,
+      data:cardBaselineJson(c)
+    }))
+  });
 }
 function restoreFirebaseBoardCache(mode=boardMode){
   try{
@@ -438,6 +451,7 @@ function clearSyncTimers(){
   if(boardSnapshotUnsub){boardSnapshotUnsub();boardSnapshotUnsub=null;}
   boardSnapshotMode=null;
   pendingSnapshotPayload=null;
+  lastAppliedBoardFingerprint='';
 }
 
 function boardUiBusy(){
@@ -458,11 +472,17 @@ function applySyncedBoardPayload(mode,payload,{fromCache=false}={}){
     pendingSnapshotPayload={mode,payload,fromCache};
     return;
   }
+  const fingerprint=boardPayloadFingerprint(mode,payload);
+  if(fingerprint===lastAppliedBoardFingerprint){
+    if(!fromCache)setSyncDot('ok');
+    return;
+  }
+  lastAppliedBoardFingerprint=fingerprint;
   applyBoardPayload(payload,mode);
   cacheFirebaseBoardPayload(mode,payload||{version:mode==='carousels'?1:2,cards,settings:mode==='videos'?normalizeSettings(getSettings()):undefined});
   renderSyncedBoard();
   if(!fromCache)setSyncDot('ok');
-  refreshDisplayUrls({onlyMissing:true}).then(()=>renderAll()).catch(()=>{});
+  refreshDisplayUrls({onlyMissing:true}).then(changed=>{if(changed)renderAll();}).catch(()=>{});
 }
 
 function flushPendingSnapshot(){
@@ -594,7 +614,7 @@ async function startBoardApp(session){
   renderAll();
   setLoading(100);setTimeout(()=>setLoading(0),400);
   // Refresh display URLs in background — re-render when done
-  refreshDisplayUrls({onlyMissing:true}).then(()=>renderAll()).catch(()=>{});
+  refreshDisplayUrls({onlyMissing:true}).then(changed=>{if(changed)renderAll();}).catch(()=>{});
 }
 
 // ========== BOARD DATA ==========
@@ -780,7 +800,7 @@ async function switchBoardMode(mode){
   activeFilters.stage='';
   renderAll();
   setLoading(100);setTimeout(()=>setLoading(0),400);
-  refreshDisplayUrls({onlyMissing:true}).then(()=>renderAll()).catch(()=>{});
+  refreshDisplayUrls({onlyMissing:true}).then(changed=>{if(changed)renderAll();}).catch(()=>{});
 }
 
 async function uploadFileWithProgress(file,subfolder,onProgress){
@@ -840,15 +860,17 @@ function triggerBlobDownload(blob,filename){
 
 
 async function refreshDisplayUrls({onlyMissing=false}={}){
+  let changed=false;
   await mapLimit(cards,5,async c=>{
-    if(c.thumbItemId&&(!onlyMissing||!c.thumbDisplayUrl)){try{c.thumbDisplayUrl=await firebaseRefreshDownloadUrl(c.thumbItemId);}catch(e){}}
-    if(c.vidItemId&&(!onlyMissing||!c.vidDisplayUrl)){try{c.vidDisplayUrl=await firebaseRefreshDownloadUrl(c.vidItemId);}catch(e){}}
+    if(c.thumbItemId&&(!onlyMissing||!c.thumbDisplayUrl)){try{const next=await firebaseRefreshDownloadUrl(c.thumbItemId);if(next&&next!==c.thumbDisplayUrl){c.thumbDisplayUrl=next;changed=true;}}catch(e){}}
+    if(c.vidItemId&&(!onlyMissing||!c.vidDisplayUrl)){try{const next=await firebaseRefreshDownloadUrl(c.vidItemId);if(next&&next!==c.vidDisplayUrl){c.vidDisplayUrl=next;changed=true;}}catch(e){}}
     if(Array.isArray(c.images)&&c.images.length){
       await mapLimit(c.images,4,async img=>{
-        if(img.itemId&&(!onlyMissing||!img.downloadUrl)){try{img.downloadUrl=await firebaseRefreshDownloadUrl(img.itemId);}catch(e){}}
+        if(img.itemId&&(!onlyMissing||!img.downloadUrl)){try{const next=await firebaseRefreshDownloadUrl(img.itemId);if(next&&next!==img.downloadUrl){img.downloadUrl=next;changed=true;}}catch(e){}}
       });
     }
   });
+  return changed;
 }
 
 // ========== SETTINGS ==========
@@ -1072,8 +1094,8 @@ async function forceRefreshBoard(){
   try{
     await loadData();
     renderSyncedBoard();
-    await refreshDisplayUrls({onlyMissing:true}).catch(()=>{});
-    renderAll();
+    const changed=await refreshDisplayUrls({onlyMissing:true}).catch(()=>false);
+    if(changed)renderAll();
     setSyncDot('ok');
     showToast('Board refreshed','success');
   }catch(e){
