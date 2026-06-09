@@ -186,7 +186,7 @@ function metricNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function calculatedImpressions({views, impressions, reach}) {
+function calculatedImpressions({impressions, reach}) {
   const direct = metricNumber(impressions, 0);
   if (direct > 0) {
     return {
@@ -196,27 +196,10 @@ function calculatedImpressions({views, impressions, reach}) {
     };
   }
 
-  const viewCount = metricNumber(views, 0);
-  const reachCount = metricNumber(reach, 0);
-  if (viewCount <= 0) {
-    return {
-      impressions: 0,
-      impressionsSource: 'unavailable',
-      frequency: null
-    };
-  }
-
-  // Meta deprecated Instagram impressions in many API surfaces and replaced
-  // them with Views. The standard media relationship is:
-  //   frequency = impressions / reach
-  //   impressions = reach * frequency
-  // When only views + reach are available, use views as the closest total
-  // exposure proxy and expose the derived frequency for transparency.
-  const frequency = reachCount > 0 ? viewCount / reachCount : null;
   return {
-    impressions: reachCount > 0 ? Math.round(reachCount * frequency) : viewCount,
-    impressionsSource: 'calculated_from_views_reach',
-    frequency
+    impressions: null,
+    impressionsSource: 'unavailable',
+    frequency: null
   };
 }
 

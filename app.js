@@ -2055,9 +2055,9 @@ function renderPlatformReport(){
   const totals=platformReportData.totals||{};
   const rows=Array.isArray(platformReportData.rows)?platformReportData.rows:[];
   const topMode=platformReportData.contentType||platformTopContentMode||'all';
-  const impressionsNote=totals.impressionsSource==='calculated_from_views_reach'
-    ? 'Instagram API does not return a separate impressions metric here. This value is a Views proxy calculated within the selected period.'
-    : (totals.impressionsSource==='meta_insights'?'Impressions source: Meta insights.':'Impressions are unavailable for this selection.');
+  const impressionsNote=totals.impressionsSource==='meta_insights'
+    ? 'Impressions source: Meta insights.'
+    : 'Impressions and frequency are unavailable because Meta did not return a separate impressions metric for this selection.';
   document.getElementById('reportsBody').innerHTML=`
     <div class="report-period-note">
       <span style="color:var(--text2);font-weight:500">${escHtml(account.label)}</span>
@@ -2069,7 +2069,7 @@ function renderPlatformReport(){
     <div class="platform-report-layout">
       <div class="platform-overview-grid">
         ${renderMetricCard('Views','Views',totals.views)}
-        ${renderMetricCard('Proxy','Impressions / views proxy',totals.impressions)}
+        ${renderMetricCard('Impressions','Impressions',totals.impressions)}
         ${renderMetricCard('Reach','Reach',totals.reach)}
         ${renderMetricCard('Frequency','Frequency',totals.frequency!=null?Number(totals.frequency).toFixed(2):null)}
         ${renderMetricCard('Engagement','Engagement',totals.totalInteractions)}
