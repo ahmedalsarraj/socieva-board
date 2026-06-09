@@ -55,11 +55,12 @@ const {defineSecret} = require('firebase-functions/params');
 const admin = require('firebase-admin');
 
 const {publishToInstagram, getInstagramPlatformReport} = require('./src/instagram');
-const {publishToYoutube} = require('./src/youtube');
+const {publishToYoutube, setYoutubeStorage} = require('./src/youtube');
 const {publishToTiktok} = require('./src/tiktok');
 
 admin.initializeApp();
 const db = admin.firestore();
+setYoutubeStorage(admin.storage());
 
 // Declared here so Cloud Functions injects it at runtime without it ever
 // touching source control, Firestore, or the browser.

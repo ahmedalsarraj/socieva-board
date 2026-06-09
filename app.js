@@ -2619,9 +2619,7 @@ function openPostingCompose(c){
   document.getElementById('postingScheduleDate').value='';
   document.getElementById('postingScheduleTime').value='';
   document.getElementById('postingComposeError').textContent='';
-  document.getElementById('postingComposeNote').textContent=POSTING_ACCOUNTS.some(a=>postingAccountConnected(a)&&a.platform==='instagram')
-    ?'This creates a backend-ready publishing job. Actual platform publishing runs from Cloud Functions, not the browser.'
-    :'Connect account metadata first. Platform tokens must be configured in backend secrets.';
+  document.getElementById('postingComposeNote').textContent='This creates a backend-ready publishing job. Actual platform publishing runs from Cloud Functions, not the browser.';
   renderPostingDestGroup();
   document.getElementById('postingComposeBg').classList.add('open');
 }
@@ -2660,6 +2658,11 @@ function postingDestPlatforms(){
   return new Set([...postingSelectedDest].map(id=>POSTING_ACCOUNTS.find(a=>a.id===id)?.platform).filter(Boolean));
 }
 
+function postingRequiresSharedCaption(){
+  const platforms=postingDestPlatforms();
+  return platforms.has('instagram')||platforms.has('tiktok');
+}
+
 // YouTube publishes with its own title/description/tags rather than the shared caption
 // (Instagram and TikTok only take a caption), so its fields only show up when a YouTube
 // destination is selected.
@@ -2667,15 +2670,21 @@ function updatePostingYoutubeFieldsVisibility(){
   const wrap=document.getElementById('postingYoutubeFields');
   const showYoutube=postingDestPlatforms().has('youtube');
   wrap.style.display=showYoutube?'':'none';
-  if(showYoutube)document.getElementById('postingYtError').textContent='';
+  const err=document.getElementById('postingYtError');
+  if(showYoutube){
+    const card=postingComposeCard;
+    err.textContent=(card?._kind==='carousel'||!postingVideoSrc(card))
+      ?'YouTube publishing requires a video ticket with an uploaded video.'
+      :'';
+  }
 }
 
 async function confirmPostingCompose(){
   const errEl=document.getElementById('postingComposeError');
   errEl.textContent='';
   const caption=document.getElementById('postingCaption').value.trim();
-  if(!caption){errEl.textContent='Please write a caption before publishing.';return;}
   if(!postingSelectedDest.size){errEl.textContent='Select at least one destination.';return;}
+  if(postingRequiresSharedCaption()&&!caption){errEl.textContent='Please write a caption before publishing to Instagram or TikTok.';return;}
   const card=postingComposeCard;
   let youtube=null;
   if(postingDestPlatforms().has('youtube')){

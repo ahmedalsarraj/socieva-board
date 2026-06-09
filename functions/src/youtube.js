@@ -12,6 +12,11 @@
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const YOUTUBE_UPLOAD_URL = 'https://www.googleapis.com/upload/youtube/v3/videos';
+let adminStorage = null;
+
+function setYoutubeStorage(storage) {
+  adminStorage = storage || null;
+}
 
 function cleanSecret(value) {
   return String(value || '').trim().replace(/^['"]|['"]$/g, '').trim();
@@ -44,7 +49,20 @@ async function exchangeRefreshToken(secrets) {
   return json.access_token;
 }
 
-function youtubeVideoUrl(card) {
+async function youtubeVideoUrl(card) {
+  if (card?.vidItemId && adminStorage) {
+    try {
+      const [url] = await adminStorage.bucket().file(card.vidItemId).getSignedUrl({
+        action: 'read',
+        expires: Date.now() + 60 * 60 * 1000
+      });
+      if (url) return url;
+    } catch (e) {
+      // Fall back to the stored Firebase download URL. Some Cloud Functions
+      // service accounts cannot sign URLs until IAM is expanded, but the
+      // tokenized download URL from the ticket is still valid for publishing.
+    }
+  }
   return card?.vidDisplayUrl || card?.vidUrl || card?.videoUrl || null;
 }
 
@@ -127,7 +145,7 @@ async function publishToYoutube({job, secrets}) {
   }
   const accessToken = await exchangeRefreshToken(secrets);
   const metadata = youtubeMetadata(job);
-  const {buffer, contentType} = await downloadVideoBytes(youtubeVideoUrl(job.card));
+  const {buffer, contentType} = await downloadVideoBytes(await youtubeVideoUrl(job.card));
   const uploadUrl = await startResumableUpload({
     accessToken,
     metadata,
@@ -137,4 +155,4 @@ async function publishToYoutube({job, secrets}) {
   return uploadVideoBytes({uploadUrl, accessToken, buffer, contentType});
 }
 
-module.exports = {publishToYoutube};
+module.exports = {publishToYoutube, setYoutubeStorage};
