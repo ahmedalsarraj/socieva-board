@@ -37,7 +37,7 @@
 const FACEBOOK_GRAPH_API = 'https://graph.facebook.com/v19.0';
 const INSTAGRAM_GRAPH_API = 'https://graph.instagram.com/v21.0';
 const CONTAINER_POLL_INTERVAL_MS = 5000;
-const CONTAINER_POLL_MAX_ATTEMPTS = 24; // ~2 minutes
+const CONTAINER_POLL_MAX_ATTEMPTS = 96; // ~8 minutes, below the 540s Cloud Function timeout
 
 /**
  * Pick the right access token for a given Instagram Business Account out of
@@ -97,13 +97,15 @@ async function igRequest(path, {method = 'GET', params = {}, accessToken}) {
 }
 
 async function waitForContainer(containerId, accessToken) {
+  let lastStatus = null;
   for (let attempt = 0; attempt < CONTAINER_POLL_MAX_ATTEMPTS; attempt++) {
     const status = await igRequest(containerId, {params: {fields: 'status_code,status'}, accessToken});
+    lastStatus = status.status || status.status_code || null;
     if (status.status_code === 'FINISHED') return;
     if (status.status_code === 'ERROR') throw new Error(status.status || 'Media container processing failed');
     await new Promise(r => setTimeout(r, CONTAINER_POLL_INTERVAL_MS));
   }
-  throw new Error('Timed out waiting for media container to finish processing');
+  throw new Error(`Timed out waiting for media container to finish processing${lastStatus ? ` (${lastStatus})` : ''}`);
 }
 
 /**
